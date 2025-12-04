@@ -35,7 +35,7 @@ export function usePosts(
 }
 
 export function usePost(address: `0x${string}` | undefined, postId: number) {
-  const { posts, isLoadingPosts } = useBlog(address);
+  const { posts, isLoadingPosts, refetchPosts } = useBlog(address);
 
   const post = useMemo(() => {
     return posts.find((p) => p.id === postId) || null;
@@ -44,6 +44,7 @@ export function usePost(address: `0x${string}` | undefined, postId: number) {
   return {
     post,
     isLoading: isLoadingPosts,
+    refetch: refetchPosts,
   };
 }
 

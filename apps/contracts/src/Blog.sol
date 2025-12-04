@@ -3,8 +3,19 @@ pragma solidity ^0.8.19;
 
 /// @title Blog - Individual decentralized blog contract
 /// @notice Each user deploys their own Blog contract to publish posts on-chain
-/// @dev Posts are stored entirely in events for gas efficiency
+/// @dev Posts are stored in contract storage for fast access, events for audit trail
 contract Blog {
+    /// @notice Post structure stored in contract
+    struct Post {
+        uint256 id;
+        address author;
+        string title;
+        string body;
+        uint256 timestamp;
+        bytes32 transactionHash; // Hash of the transaction that created/edited this post
+        bool deleted; // Flag to mark deleted posts
+    }
+
     /// @notice Emitted when a new post is published
     /// @param id The sequential post ID
     /// @param author The address of the post author
@@ -28,6 +39,9 @@ contract Blog {
     /// @notice Total number of posts published
     uint256 public postCount;
 
+    /// @notice Mapping from post ID to Post struct
+    mapping(uint256 => Post) public posts;
+
     /// @notice Maximum allowed title length in bytes
     uint256 public constant MAX_TITLE_LENGTH = 500;
 
@@ -49,7 +63,7 @@ contract Blog {
     }
 
     /// @notice Publishes a new post to the blog
-    /// @dev Post content is stored in event logs, not contract storage
+    /// @dev Post content is stored in contract storage AND emitted as event
     /// @param title The post title (max 500 bytes)
     /// @param body The post body content (max 50000 bytes, supports markdown)
     function publish(string calldata title, string calldata body) external onlyOwner {
@@ -57,8 +71,115 @@ contract Blog {
         require(bytes(body).length <= MAX_BODY_LENGTH, "Body too long");
         require(bytes(body).length > 0, "Body empty");
 
-        emit PostCreated(postCount, msg.sender, title, body, block.timestamp);
+        uint256 id = postCount;
+        
+        // Store post in contract storage
+        // Note: transactionHash will be captured by frontend/SDK from tx receipt
+        posts[id] = Post({
+            id: id,
+            author: msg.sender,
+            title: title,
+            body: body,
+            timestamp: block.timestamp,
+            transactionHash: bytes32(0), // Will be filled by SDK from tx receipt
+            deleted: false
+        });
+
         postCount++;
+
+        // Emit event for audit trail and indexing
+        emit PostCreated(id, msg.sender, title, body, block.timestamp);
+    }
+
+    /// @notice Edits an existing post
+    /// @dev Only the blog owner can edit posts
+    /// @param id The post ID to edit
+    /// @param newTitle The new title (max 500 bytes)
+    /// @param newBody The new body content (max 50000 bytes)
+    function editPost(uint256 id, string calldata newTitle, string calldata newBody) external onlyOwner {
+        require(id < postCount, "Post does not exist");
+        require(!posts[id].deleted, "Post is deleted");
+        require(bytes(newTitle).length <= MAX_TITLE_LENGTH, "Title too long");
+        require(bytes(newBody).length <= MAX_BODY_LENGTH, "Body too long");
+        require(bytes(newBody).length > 0, "Body empty");
+
+        // Update post in storage
+        posts[id].title = newTitle;
+        posts[id].body = newBody;
+        posts[id].timestamp = block.timestamp; // Update timestamp on edit
+        // transactionHash will be updated by SDK from tx receipt
+
+        // Emit event for edit (could create PostEdited event if needed)
+        emit PostCreated(id, msg.sender, newTitle, newBody, block.timestamp);
+    }
+
+    /// @notice Deletes a post (soft delete - marks as deleted)
+    /// @dev Only the blog owner can delete posts
+    /// @param id The post ID to delete
+    function deletePost(uint256 id) external onlyOwner {
+        require(id < postCount, "Post does not exist");
+        require(!posts[id].deleted, "Post already deleted");
+
+        // Soft delete - mark as deleted but keep data
+        posts[id].deleted = true;
+        posts[id].timestamp = block.timestamp; // Update timestamp on delete
+    }
+
+    /// @notice Get a post by ID
+    /// @param id The post ID
+    /// @return Post struct
+    function getPost(uint256 id) external view returns (Post memory) {
+        require(id < postCount, "Post does not exist");
+        return posts[id];
+    }
+
+    /// @notice Get multiple posts by IDs
+    /// @param ids Array of post IDs
+    /// @return Array of Post structs
+    function getPosts(uint256[] calldata ids) external view returns (Post[] memory) {
+        Post[] memory result = new Post[](ids.length);
+        for (uint256 i = 0; i < ids.length; i++) {
+            require(ids[i] < postCount, "Post does not exist");
+            result[i] = posts[ids[i]];
+        }
+        return result;
+    }
+
+    /// @notice Get posts in a range (for pagination)
+    /// @param start Starting post ID (inclusive)
+    /// @param end Ending post ID (exclusive)
+    /// @param includeDeleted Whether to include deleted posts
+    /// @return Array of Post structs
+    function getPostsRange(uint256 start, uint256 end, bool includeDeleted) public view returns (Post[] memory) {
+        require(start <= end, "Invalid range");
+        require(end <= postCount, "Range exceeds post count");
+        
+        uint256 length = end - start;
+        Post[] memory tempResult = new Post[](length);
+        uint256 count = 0;
+        
+        // First pass: collect posts
+        for (uint256 i = 0; i < length; i++) {
+            Post memory post = posts[start + i];
+            if (includeDeleted || !post.deleted) {
+                tempResult[count] = post;
+                count++;
+            }
+        }
+        
+        // Second pass: create properly sized array
+        Post[] memory result = new Post[](count);
+        for (uint256 i = 0; i < count; i++) {
+            result[i] = tempResult[i];
+        }
+        
+        return result;
+    }
+
+    /// @notice Get all active (non-deleted) posts
+    /// @return Array of Post structs
+    function getAllActivePosts() external view returns (Post[] memory) {
+        return getPostsRange(0, postCount, false);
     }
 
     /// @notice Transfers ownership of the blog to a new address

@@ -12,10 +12,12 @@ export interface Post {
   title: string;
   /** Post body content, supports markdown (max 50000 bytes) */
   body: string;
-  /** Unix timestamp when the post was published */
+  /** Unix timestamp when the post was published/edited */
   timestamp: number;
-  /** Transaction hash of the publish transaction */
+  /** Transaction hash of the publish/edit transaction (from receipt) */
   transactionHash: string;
+  /** Whether this post has been deleted (soft delete) */
+  deleted: boolean;
 }
 
 /**

@@ -49,7 +49,14 @@
       "inputs": [{ "internalType": "string", "name": "_name", "type": "string" }],
       "name": "createBlog",
       "outputs": [{ "internalType": "address", "name": "blogAddress", "type": "address" }],
-      "stateMutability": "payable",
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [{ "internalType": "string", "name": "_name", "type": "string" }],
+      "name": "createBlogAsOwner",
+      "outputs": [{ "internalType": "address", "name": "blogAddress", "type": "address" }],
+      "stateMutability": "nonpayable",
       "type": "function"
     },
     {

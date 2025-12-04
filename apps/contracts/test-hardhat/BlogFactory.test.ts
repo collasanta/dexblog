@@ -33,7 +33,6 @@ describe("BlogFactory", function () {
     
     const BlogFactory = await ethers.getContractFactory("BlogFactory");
     factory = await BlogFactory.deploy(
-      SETUP_FEE,
       await mockUSDC.getAddress(),
       SETUP_FEE_STABLE
     );
@@ -45,7 +44,7 @@ describe("BlogFactory", function () {
     });
 
     it("should set the setup fee correctly", async function () {
-      expect(await factory.setupFee()).to.equal(SETUP_FEE);
+      expect(await factory.setupFee()).to.equal(SETUP_FEE_STABLE);
     });
 
     it("should start with zero blogs", async function () {
@@ -222,6 +221,34 @@ describe("BlogFactory", function () {
       const balanceAfter = await ethers.provider.getBalance(user2.address);
 
       expect(balanceAfter).to.equal(balanceBefore + SETUP_FEE - gasUsed);
+    });
+  });
+
+  describe("Create Blog As Owner", function () {
+    it("should allow factory owner to create blog for free", async function () {
+      const tx = await factory.createBlogAsOwner("Owner Blog");
+      const receipt = await tx.wait();
+      
+      expect(receipt).to.not.be.null;
+      expect(await factory.totalBlogs()).to.equal(1);
+      
+      const blogs = await factory.getBlogsByOwner(factoryOwner.address);
+      expect(blogs.length).to.equal(1);
+    });
+
+    it("should not require USDC payment for owner", async function () {
+      // Owner creates blog without any USDC balance or approval
+      const tx = await factory.createBlogAsOwner("Free Owner Blog");
+      const receipt = await tx.wait();
+      
+      expect(receipt).to.not.be.null;
+      expect(await factory.totalBlogs()).to.equal(1);
+    });
+
+    it("should revert when non-owner calls createBlogAsOwner", async function () {
+      await expect(
+        factory.connect(user1).createBlogAsOwner("Should Fail")
+      ).to.be.revertedWith("Not owner");
     });
   });
 });

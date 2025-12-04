@@ -1,27 +1,51 @@
 "use client";
 
-import { use } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { GlassCard } from "@/components/ui/card";
 import { usePost } from "@/hooks/usePosts";
 import { useBlog } from "@/hooks/useBlog";
+import { EditPostForm } from "@/components/EditPostForm";
 import { formatDate, truncateAddress } from "@/lib/utils";
-import { Loader2, ArrowLeft, Clock, User, ExternalLink } from "lucide-react";
+import { Loader2, ArrowLeft, Clock, User, ExternalLink, Edit2, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { useAccount } from "wagmi";
+import { useRouter } from "next/navigation";
 
 interface PostPageProps {
-  params: Promise<{ address: string; id: string }>;
+  params: { address: string; id: string };
 }
 
 export default function PostPage({ params }: PostPageProps) {
-  const { address, id } = use(params);
+  const { address, id } = params;
   const blogAddress = address as `0x${string}`;
   const postId = parseInt(id);
+  const router = useRouter();
+  const { address: connectedAddress } = useAccount();
+  const [isEditing, setIsEditing] = useState(false);
 
-  const { info } = useBlog(blogAddress);
-  const { post, isLoading } = usePost(blogAddress, postId);
+  const { info, deletePost, isDeleting } = useBlog(blogAddress);
+  const { post, isLoading, refetch } = usePost(blogAddress, postId);
+
+  const isOwner = info && connectedAddress && info.owner.toLowerCase() === connectedAddress.toLowerCase();
+
+  const handleDelete = async () => {
+    if (!confirm("Are you sure you want to delete this post? This action cannot be undone.")) {
+      return;
+    }
+
+    const success = await deletePost(postId);
+    if (success) {
+      router.push(`/blog/${address}`);
+    }
+  };
+
+  const handleEditSuccess = () => {
+    setIsEditing(false);
+    refetch();
+  };
 
   return (
     <main className="min-h-screen gradient-bg">
@@ -46,12 +70,50 @@ export default function PostPage({ params }: PostPageProps) {
               This post doesn&apos;t exist.
             </p>
           </div>
+        ) : isEditing ? (
+          <EditPostForm
+            blogAddress={blogAddress}
+            postId={postId}
+            initialTitle={post.title}
+            initialBody={post.body}
+            onCancel={() => setIsEditing(false)}
+            onSuccess={handleEditSuccess}
+          />
         ) : (
           <article>
             <header className="mb-8">
-              <h1 className="text-3xl md:text-4xl font-bold mb-4">
-                {post.title}
-              </h1>
+              <div className="flex items-start justify-between mb-4">
+                <h1 className="text-3xl md:text-4xl font-bold flex-1">
+                  {post.title}
+                </h1>
+                {isOwner && (
+                  <div className="flex items-center gap-2 ml-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsEditing(true)}
+                      className="gap-2"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleDelete}
+                      disabled={isDeleting}
+                      className="gap-2 text-destructive hover:text-destructive"
+                    >
+                      {isDeleting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                      Delete
+                    </Button>
+                  </div>
+                )}
+              </div>
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
                 <div className="flex items-center gap-1">
                   <Clock className="h-4 w-4" />
@@ -61,15 +123,17 @@ export default function PostPage({ params }: PostPageProps) {
                   <User className="h-4 w-4" />
                   {truncateAddress(post.author)}
                 </div>
-                <a
-                  href={`https://basescan.org/tx/${post.transactionHash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 hover:text-primary transition-colors"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  View on Explorer
-                </a>
+                {post.transactionHash && (
+                  <a
+                    href={`https://arbiscan.io/tx/${post.transactionHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 hover:text-primary transition-colors"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    View on Explorer
+                  </a>
+                )}
               </div>
             </header>
 

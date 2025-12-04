@@ -349,5 +349,28 @@ contract BlogFactoryTest is Test {
         vm.expectRevert("Not owner");
         factory.withdraw();
     }
+
+    // ============ Create Blog As Owner Tests ============
+
+    function test_CreateBlogAsOwner() public {
+        // Factory owner can create blog for free
+        address blogAddress = factory.createBlogAsOwner("Owner Blog");
+        assertTrue(blogAddress != address(0));
+        assertEq(factory.totalBlogs(), 1);
+        assertEq(factory.getBlogsByOwner(factoryOwner).length, 1);
+    }
+
+    function test_CreateBlogAsOwner_NoPaymentRequired() public {
+        // Owner creates blog without any USDC balance or approval
+        address blogAddress = factory.createBlogAsOwner("Free Owner Blog");
+        assertTrue(blogAddress != address(0));
+        assertEq(factory.totalBlogs(), 1);
+    }
+
+    function test_RevertWhen_NonOwnerCallsCreateBlogAsOwner() public {
+        vm.prank(user1);
+        vm.expectRevert("Not owner");
+        factory.createBlogAsOwner("Should Fail");
+    }
 }
 

@@ -43,13 +43,50 @@ export class DexBlogFactory {
   }
 
   /**
-   * Create a new blog
+   * Create a new blog (requires USDC payment)
    * @param name Name for the new blog
    * @param setupFee Fee to pay for blog creation (get from getSetupFee())
    * @returns Object containing the new blog address and transaction receipt
    */
   async createBlog(name: string, setupFee: bigint): Promise<CreateBlogResult> {
     const tx = await this.contract.createBlog(name, { value: setupFee });
+    const receipt = await tx.wait();
+
+    // Find BlogCreated event in logs
+    const event = receipt.logs.find((log: ethers.Log) => {
+      try {
+        const parsed = this.contract.interface.parseLog({
+          topics: log.topics as string[],
+          data: log.data,
+        });
+        return parsed?.name === "BlogCreated";
+      } catch {
+        return false;
+      }
+    });
+
+    if (!event) {
+      throw new Error("BlogCreated event not found in transaction receipt");
+    }
+
+    const parsed = this.contract.interface.parseLog({
+      topics: event.topics as string[],
+      data: event.data,
+    });
+
+    return {
+      blogAddress: parsed!.args.blogAddress,
+      receipt,
+    };
+  }
+
+  /**
+   * Create a new blog as factory owner (free, no payment required)
+   * @param name Name for the new blog
+   * @returns Object containing the new blog address and transaction receipt
+   */
+  async createBlogAsOwner(name: string): Promise<CreateBlogResult> {
+    const tx = await this.contract.createBlogAsOwner(name);
     const receipt = await tx.wait();
 
     // Find BlogCreated event in logs

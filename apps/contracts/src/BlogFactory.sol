@@ -87,6 +87,15 @@ contract BlogFactory {
         return _createBlogInternal(msg.sender, _name);
     }
 
+    /// @notice Creates a new blog for the factory owner (free, no payment required)
+    /// @dev Only the factory owner can call this function
+    /// @param _name The name for the new blog
+    /// @return blogAddress The address of the newly deployed Blog contract
+    function createBlogAsOwner(string calldata _name) external returns (address blogAddress) {
+        require(msg.sender == factoryOwner, "Not owner");
+        return _createBlogInternal(msg.sender, _name);
+    }
+
     /// @notice Internal function to create a blog (shared logic)
     /// @param _owner The owner of the blog
     /// @param _name The name for the new blog

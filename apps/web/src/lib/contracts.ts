@@ -5,7 +5,7 @@ import { base, polygon, arbitrum, optimism, mainnet, bsc } from "wagmi/chains";
 export const FACTORY_ADDRESSES: Record<number, `0x${string}`> = {
   [base.id]: "0x0000000000000000000000000000000000000000", // Deploy and update
   [polygon.id]: "0x0000000000000000000000000000000000000000",
-  [arbitrum.id]: "0x0000000000000000000000000000000000000000",
+  [arbitrum.id]: "0xccb9EFF798D12D78d179c81aEC83c9E9F974013B", // ✅ Deployed on Arbitrum Mainnet (with CRUD support)
   [optimism.id]: "0x0000000000000000000000000000000000000000",
   [mainnet.id]: "0x0000000000000000000000000000000000000000",
   [bsc.id]: "0x0000000000000000000000000000000000000000",
@@ -77,6 +77,24 @@ export const BLOG_ABI = [
     type: "function",
   },
   {
+    inputs: [
+      { name: "id", type: "uint256" },
+      { name: "newTitle", type: "string" },
+      { name: "newBody", type: "string" },
+    ],
+    name: "editPost",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "id", type: "uint256" }],
+    name: "deletePost",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
     inputs: [{ name: "newOwner", type: "address" }],
     name: "transferOwnership",
     outputs: [],
@@ -142,6 +160,20 @@ export const FACTORY_ABI = [
     name: "createBlog",
     outputs: [{ type: "address" }],
     stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "_name", type: "string" }],
+    name: "createBlogAsOwner",
+    outputs: [{ type: "address" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "factoryOwner",
+    outputs: [{ type: "address" }],
+    stateMutability: "view",
     type: "function",
   },
   {

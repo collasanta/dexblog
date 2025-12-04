@@ -6,6 +6,7 @@ import {
   useChainId,
   useAccount,
   usePublicClient,
+  useBalance,
 } from "wagmi";
 import {
   getFactoryAddress,
@@ -14,8 +15,8 @@ import {
   USDC_DECIMALS,
   ERC20_ABI,
 } from "@/lib/contracts";
-import { useState } from "react";
-import { parseUnits } from "viem";
+import { useState, useEffect } from "react";
+import { parseUnits, formatUnits } from "viem";
 
 export function useBlogFactory() {
   const chainId = useChainId();
@@ -44,6 +45,17 @@ export function useBlogFactory() {
     },
   });
 
+  const { data: factoryOwner } = useReadContract({
+    address: factoryAddress || undefined,
+    abi: FACTORY_ABI,
+    functionName: "factoryOwner",
+    query: {
+      enabled: !!factoryAddress,
+    },
+  });
+
+  const isFactoryOwner = address && factoryOwner && address.toLowerCase() === (factoryOwner as string).toLowerCase();
+
   const { data: allowance } = useReadContract({
     address: usdcAddress || undefined,
     abi: ERC20_ABI,
@@ -51,10 +63,60 @@ export function useBlogFactory() {
     args: address && factoryAddress ? [address, factoryAddress] : undefined,
     query: {
       enabled: !!usdcAddress && !!address && !!factoryAddress,
+      refetchInterval: 2000, // Refetch every 2 seconds to check allowance updates
     },
   });
 
+  const { data: usdcBalance } = useReadContract({
+    address: usdcAddress || undefined,
+    abi: ERC20_ABI,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    query: {
+      enabled: !!usdcAddress && !!address,
+    },
+  });
+
+  // Check native ETH balance for gas
+  const { data: nativeBalance } = useBalance({
+    address: address || undefined,
+  });
+
   const { writeContractAsync } = useWriteContract();
+  
+  // Use fixed gas estimate instead of calculating every time
+  // Approximate gas costs based on typical values:
+  // - createBlog: ~600k gas
+  // - createBlogAsOwner: ~500k gas (no USDC transfer)
+  // We'll use a conservative estimate
+  const estimatedGas = isFactoryOwner ? 500000n : 600000n;
+  
+  // Get current gas price and calculate estimated cost
+  const [estimatedGasCost, setEstimatedGasCost] = useState<bigint | null>(null);
+  const [isEstimatingGas, setIsEstimatingGas] = useState(false);
+
+  // Estimate gas cost once when component mounts or chain changes
+  useEffect(() => {
+    const estimateGasCost = async () => {
+      if (!publicClient || !address) return;
+      
+      setIsEstimatingGas(true);
+      try {
+        const gasPrice = await publicClient.getGasPrice();
+        const totalCost = estimatedGas * gasPrice;
+        setEstimatedGasCost(totalCost);
+      } catch (error) {
+        console.error("Failed to estimate gas cost:", error);
+        // Use a fallback estimate if we can't get gas price
+        // Assume 0.0001 ETH as fallback
+        setEstimatedGasCost(parseUnits("0.0001", 18));
+      } finally {
+        setIsEstimatingGas(false);
+      }
+    };
+
+    estimateGasCost();
+  }, [publicClient, address, estimatedGas]);
 
   const createBlog = async (name: string): Promise<string | null> => {
     if (!factoryAddress) {
@@ -62,16 +124,64 @@ export function useBlogFactory() {
       throw new Error("Factory contract not deployed on this chain");
     }
     
-    if (!usdcAddress || !address || !publicClient) {
-      console.error("USDC address or user address not available");
+    if (!address || !publicClient) {
+      console.error("User address not available");
+      return null;
+    }
+
+    // Validate factory address is not zero
+    if (factoryAddress === "0x0000000000000000000000000000000000000000") {
+      throw new Error("Factory contract not deployed on this chain");
+    }
+
+    // Check if user is factory owner - if so, create blog for free
+    const currentFactoryOwner = await publicClient.readContract({
+      address: factoryAddress,
+      abi: FACTORY_ABI,
+      functionName: "factoryOwner",
+    });
+
+    const isOwner = address.toLowerCase() === (currentFactoryOwner as string).toLowerCase();
+
+    if (isOwner) {
+      // Factory owner creates blog for free
+      try {
+        setIsCreating(true);
+        const hash = await writeContractAsync({
+          address: factoryAddress,
+          abi: FACTORY_ABI,
+          functionName: "createBlogAsOwner",
+          args: [name],
+        });
+
+        console.log("Transaction hash:", hash);
+        return hash;
+      } catch (error) {
+        console.error("Failed to create blog as owner:", error);
+        throw error;
+      } finally {
+        setIsCreating(false);
+      }
+    }
+
+    // Regular users need to pay USDC
+    if (!usdcAddress) {
+      console.error("USDC address not available");
       return null;
     }
 
     const fee = setupFee || parseUnits("10", USDC_DECIMALS[chainId] || 6);
     
-    // Validate factory address is not zero
-    if (factoryAddress === "0x0000000000000000000000000000000000000000") {
-      throw new Error("Factory contract not deployed on this chain");
+    // Check USDC balance first
+    const balance = await publicClient.readContract({
+      address: usdcAddress,
+      abi: ERC20_ABI,
+      functionName: "balanceOf",
+      args: [address],
+    });
+
+    if (balance < fee) {
+      throw new Error(`Insufficient USDC balance. You need ${formatUnits(fee, USDC_DECIMALS[chainId] || 6)} USDC but only have ${formatUnits(balance, USDC_DECIMALS[chainId] || 6)} USDC`);
     }
 
     try {
@@ -86,16 +196,29 @@ export function useBlogFactory() {
       // Step 2: Approve if needed
       if (!currentAllowance || currentAllowance < fee) {
         setIsApproving(true);
-        const approveHash = await writeContractAsync({
-          address: usdcAddress,
-          abi: ERC20_ABI,
-          functionName: "approve",
-          args: [factoryAddress, fee],
-        });
-        
-        // Wait for approval transaction
-        await publicClient.waitForTransactionReceipt({ hash: approveHash });
-        setIsApproving(false);
+        try {
+          const approveHash = await writeContractAsync({
+            address: usdcAddress,
+            abi: ERC20_ABI,
+            functionName: "approve",
+            args: [factoryAddress, fee],
+          });
+          
+          // Wait for approval transaction to be mined
+          const receipt = await publicClient.waitForTransactionReceipt({ hash: approveHash });
+          
+          if (receipt.status !== "success") {
+            throw new Error("Approval transaction failed");
+          }
+          
+          setIsApproving(false);
+          
+          // Small delay to ensure allowance is updated on-chain
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (error) {
+          setIsApproving(false);
+          throw new Error(`Failed to approve USDC: ${error instanceof Error ? error.message : "Unknown error"}`);
+        }
       }
 
       // Step 3: Create blog
@@ -118,13 +241,25 @@ export function useBlogFactory() {
     }
   };
 
+  const hasEnoughNativeBalance = nativeBalance && estimatedGasCost 
+    ? nativeBalance.value >= estimatedGasCost 
+    : true; // Default to true if we can't estimate
+
   return {
     factoryAddress,
     usdcAddress,
     setupFee: setupFee as bigint | undefined,
     totalBlogs: totalBlogs ? Number(totalBlogs) : undefined,
     allowance: allowance as bigint | undefined,
+    usdcBalance: usdcBalance as bigint | undefined,
+    nativeBalance: nativeBalance?.value,
+    estimatedGas,
+    estimatedGasCost,
+    isEstimatingGas,
+    hasEnoughNativeBalance,
     needsApproval: allowance && setupFee ? allowance < setupFee : false,
+    hasEnoughBalance: usdcBalance && setupFee ? usdcBalance >= setupFee : false,
+    isFactoryOwner: isFactoryOwner || false,
     isLoadingFee,
     isLoadingTotal,
     createBlog,

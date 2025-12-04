@@ -22,7 +22,7 @@ export function Header() {
             href="/dashboard"
             className="text-sm text-muted-foreground hover:text-primary transition-colors"
           >
-            Dashboard
+            My Blogs
           </Link>
           <a
             href="https://github.com/collasanta/dexblog"

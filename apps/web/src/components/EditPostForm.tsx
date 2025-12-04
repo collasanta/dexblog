@@ -1,25 +1,35 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { GlassCard } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useBlog } from "@/hooks/useBlog";
-import { Loader2, Eye, Edit3, Send } from "lucide-react";
+import { Loader2, Eye, Edit3, Save, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
-interface PublishPostFormProps {
+interface EditPostFormProps {
   blogAddress: `0x${string}`;
+  postId: number;
+  initialTitle: string;
+  initialBody: string;
+  onCancel: () => void;
+  onSuccess: () => void;
 }
 
-export function PublishPostForm({ blogAddress }: PublishPostFormProps) {
-  const router = useRouter();
-  const { publish, isPublishing } = useBlog(blogAddress);
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
+export function EditPostForm({
+  blogAddress,
+  postId,
+  initialTitle,
+  initialBody,
+  onCancel,
+  onSuccess,
+}: EditPostFormProps) {
+  const { editPost, isEditing } = useBlog(blogAddress);
+  const [title, setTitle] = useState(initialTitle);
+  const [body, setBody] = useState(initialBody);
   const [showPreview, setShowPreview] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -27,9 +37,9 @@ export function PublishPostForm({ blogAddress }: PublishPostFormProps) {
 
     if (!title.trim() || !body.trim()) return;
 
-    const success = await publish(title, body);
+    const success = await editPost(postId, title, body);
     if (success) {
-      router.push(`/blog/${blogAddress}`);
+      onSuccess();
     }
   };
 
@@ -37,12 +47,13 @@ export function PublishPostForm({ blogAddress }: PublishPostFormProps) {
   const bodyBytes = new TextEncoder().encode(body).length;
   const isTitleValid = titleBytes <= 500;
   const isBodyValid = bodyBytes <= 50000 && bodyBytes > 0;
+  const hasChanges = title !== initialTitle || body !== initialBody;
 
   return (
     <form onSubmit={handleSubmit}>
       <GlassCard className="p-6 mb-6">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold">New Post</h2>
+          <h2 className="text-xl font-semibold">Edit Post</h2>
           <Button
             type="button"
             variant="outline"
@@ -91,7 +102,7 @@ export function PublishPostForm({ blogAddress }: PublishPostFormProps) {
                 placeholder="Enter your post title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                disabled={isPublishing}
+                disabled={isEditing}
               />
             </div>
 
@@ -111,7 +122,7 @@ export function PublishPostForm({ blogAddress }: PublishPostFormProps) {
                 placeholder="Write your post content here. Markdown is supported..."
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
-                disabled={isPublishing}
+                disabled={isEditing}
                 className="min-h-[300px] font-mono text-sm"
               />
             </div>
@@ -120,25 +131,37 @@ export function PublishPostForm({ blogAddress }: PublishPostFormProps) {
       </GlassCard>
 
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Posts are stored on-chain. You can edit or delete them later if you&apos;re the blog owner.
-        </p>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onCancel}
+          disabled={isEditing}
+          className="gap-2"
+        >
+          <X className="h-4 w-4" />
+          Cancel
+        </Button>
         <Button
           type="submit"
           disabled={
-            isPublishing || !title.trim() || !body.trim() || !isTitleValid || !isBodyValid
+            isEditing ||
+            !title.trim() ||
+            !body.trim() ||
+            !isTitleValid ||
+            !isBodyValid ||
+            !hasChanges
           }
           className="gap-2"
         >
-          {isPublishing ? (
+          {isEditing ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              Publishing...
+              Saving...
             </>
           ) : (
             <>
-              <Send className="h-4 w-4" />
-              Publish Post
+              <Save className="h-4 w-4" />
+              Save Changes
             </>
           )}
         </Button>

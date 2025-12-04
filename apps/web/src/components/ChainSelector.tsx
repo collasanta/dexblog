@@ -8,7 +8,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supportedChains, SupportedChainId } from "@/lib/chains";
-import { useChainId, useSwitchChain } from "wagmi";
+import { useChainId, useSwitchChain, useAccount, useReadContract } from "wagmi";
+import { getUSDCAddress, USDC_DECIMALS, ERC20_ABI } from "@/lib/contracts";
+import { formatUnits } from "@/lib/utils";
 
 interface ChainSelectorProps {
   onChainChange?: (chainId: number) => void;
@@ -21,8 +23,21 @@ export function ChainSelector({
 }: ChainSelectorProps) {
   const currentChainId = useChainId();
   const { switchChain } = useSwitchChain();
+  const { address } = useAccount();
 
   const chainId = selectedChainId ?? currentChainId;
+  const usdcAddress = getUSDCAddress(chainId);
+
+  // Fetch USDC balance for current chain
+  const { data: usdcBalance, isLoading: isLoadingBalance } = useReadContract({
+    address: usdcAddress || undefined,
+    abi: ERC20_ABI,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    query: {
+      enabled: !!usdcAddress && !!address,
+    },
+  });
 
   const handleChange = (value: string) => {
     const newChainId = parseInt(value) as SupportedChainId;
@@ -32,10 +47,29 @@ export function ChainSelector({
     onChainChange?.(newChainId);
   };
 
+  // Get current chain name
+  const currentChain = supportedChains.find((chain) => chain.id === chainId);
+  const chainName = currentChain?.name || "Select chain";
+
+  // Format balance
+  const balanceText =
+    usdcBalance !== undefined && address
+      ? isLoadingBalance
+        ? "..."
+        : formatUnits(usdcBalance, USDC_DECIMALS[chainId] || 6)
+      : null;
+
   return (
     <Select value={chainId?.toString()} onValueChange={handleChange}>
       <SelectTrigger className="w-full">
-        <SelectValue placeholder="Select chain" />
+        <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
+          <SelectValue placeholder="Select chain" className="flex-1" />
+          {balanceText && address && (
+            <span className="text-xs text-muted-foreground shrink-0">
+              • {balanceText} USDC
+            </span>
+          )}
+        </div>
       </SelectTrigger>
       <SelectContent>
         {supportedChains.map((chain) => (

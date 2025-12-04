@@ -1,6 +1,5 @@
 "use client";
 
-import { use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/Header";
@@ -11,11 +10,11 @@ import { useAccount } from "wagmi";
 import { Loader2, ArrowLeft, ShieldAlert } from "lucide-react";
 
 interface NewPostPageProps {
-  params: Promise<{ address: string }>;
+  params: { address: string };
 }
 
 export default function NewPostPage({ params }: NewPostPageProps) {
-  const { address } = use(params);
+  const { address } = params;
   const blogAddress = address as `0x${string}`;
   const { info, isLoadingPosts } = useBlog(blogAddress);
   const { address: userAddress, isConnected } = useAccount();

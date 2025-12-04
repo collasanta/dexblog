@@ -23,6 +23,9 @@ export function DeployBlogCard() {
     setupFee,
     usdcAddress,
     factoryAddress,
+    usdcBalance,
+    hasEnoughBalance,
+    isFactoryOwner,
     createBlog,
     isCreating,
     isApproving,
@@ -34,6 +37,7 @@ export function DeployBlogCard() {
     if (!blogName.trim()) return;
 
     try {
+      // createBlog already handles approve automatically
       const result = await createBlog(blogName);
       if (result) {
         setDeployedAddress(result);
@@ -41,6 +45,8 @@ export function DeployBlogCard() {
       }
     } catch (error) {
       console.error("Failed to create blog:", error);
+      // Show error to user
+      alert(error instanceof Error ? error.message : "Failed to create blog. Please try again.");
     }
   };
 
@@ -83,10 +89,10 @@ export function DeployBlogCard() {
 
   return (
     <GlassCard className="w-full max-w-md p-8">
-      <div className="space-y-6">
+        <div className="space-y-6">
         <div className="text-center">
           <h2 className="text-2xl font-bold mb-2">Deploy Your Blog Contract</h2>
-          {setupFee !== undefined && setupFee > 0n ? (
+          {setupFee !== undefined && setupFee > 0n && !isFactoryOwner ? (
             <div className="flex items-center justify-center gap-2 mt-2">
               <p className="text-muted-foreground text-sm">
                 One-time fee:{" "}
@@ -128,9 +134,24 @@ export function DeployBlogCard() {
           </div>
 
 
-          {needsApproval && (
-            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 text-sm text-yellow-500">
-              You need to approve USDC spending first
+          {setupFee !== undefined && setupFee > 0n && !isFactoryOwner && (
+            <>
+              {!hasEnoughBalance && usdcBalance !== undefined && (
+                <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-sm text-red-500">
+                  ⚠️ Insufficient USDC balance. You need {formatUnits(setupFee, USDC_DECIMALS[chainId] || 6)} USDC but only have {formatUnits(usdcBalance, USDC_DECIMALS[chainId] || 6)} USDC
+                </div>
+              )}
+              {hasEnoughBalance && needsApproval && (
+                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 text-sm text-yellow-500">
+                  ℹ️ You'll need to approve USDC spending first (this happens automatically when you click Deploy)
+                </div>
+              )}
+            </>
+          )}
+          
+          {isFactoryOwner && (
+            <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3 text-sm text-green-500">
+              ✓ You're the factory owner - blog creation is free for you!
             </div>
           )}
         </div>
@@ -142,8 +163,8 @@ export function DeployBlogCard() {
             !blogName.trim() ||
             isCreating ||
             isApproving ||
-            !usdcAddress ||
-            !factoryAddress
+            (!isFactoryOwner && (!usdcAddress || !factoryAddress)) ||
+            (!isFactoryOwner && !hasEnoughBalance && setupFee !== undefined && setupFee > 0n)
           }
           className="w-full gap-2"
           size="lg"
