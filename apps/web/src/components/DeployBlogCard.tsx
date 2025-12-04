@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ChainSelector } from "./ChainSelector";
 import { useBlogFactory } from "@/hooks/useBlogFactory";
-import { Rocket, Loader2, CheckCircle, ExternalLink } from "lucide-react";
-import { formatEther } from "@/lib/utils";
+import { Rocket, Loader2, CheckCircle, ExternalLink, Coins, Info } from "lucide-react";
+import { formatEther, formatUnits } from "@/lib/utils";
+import { USDC_DECIMALS } from "@/lib/contracts";
 import Link from "next/link";
 
 export function DeployBlogCard() {
@@ -18,7 +19,16 @@ export function DeployBlogCard() {
   const [blogName, setBlogName] = useState("");
   const [deployedAddress, setDeployedAddress] = useState<string | null>(null);
 
-  const { setupFee, createBlog, isCreating, isLoadingFee } = useBlogFactory();
+  const {
+    setupFee,
+    usdcAddress,
+    factoryAddress,
+    createBlog,
+    isCreating,
+    isApproving,
+    isLoadingFee,
+    needsApproval,
+  } = useBlogFactory();
 
   const handleDeploy = async () => {
     if (!blogName.trim()) return;
@@ -75,10 +85,29 @@ export function DeployBlogCard() {
     <GlassCard className="w-full max-w-md p-8">
       <div className="space-y-6">
         <div className="text-center">
-          <h2 className="text-2xl font-bold mb-2">Deploy Your Blog</h2>
-          <p className="text-muted-foreground text-sm">
-            Create your own decentralized blog on any chain
-          </p>
+          <h2 className="text-2xl font-bold mb-2">Deploy Your Blog Contract</h2>
+          {setupFee !== undefined && setupFee > 0n ? (
+            <div className="flex items-center justify-center gap-2 mt-2">
+              <p className="text-muted-foreground text-sm">
+                One-time fee:{" "}
+                <span className="font-mono text-primary font-semibold">
+                  {isLoadingFee
+                    ? "..."
+                    : `${formatUnits(setupFee, USDC_DECIMALS[chainId] || 6)} USDC`}
+                </span>
+              </p>
+              <div className="group relative">
+                <Info className="h-4 w-4 text-muted-foreground cursor-help hover:text-primary transition-colors" />
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 p-2 bg-muted border border-border rounded-lg text-xs text-foreground opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 shadow-lg">
+                  One-time payment to deploy your blog contract. Payable in USDC only.
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              This will create your own blog contract.
+            </p>
+          )}
         </div>
 
         <div className="space-y-4">
@@ -94,28 +123,38 @@ export function DeployBlogCard() {
               placeholder="My Awesome Blog"
               value={blogName}
               onChange={(e) => setBlogName(e.target.value)}
-              disabled={!isConnected || isCreating}
+              disabled={!isConnected || isCreating || isApproving}
             />
           </div>
 
-          {setupFee !== undefined && setupFee > 0n && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Setup Fee</span>
-              <span className="font-mono text-primary">
-                {isLoadingFee ? "..." : `${formatEther(setupFee)} ETH`}
-              </span>
+
+          {needsApproval && (
+            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 text-sm text-yellow-500">
+              You need to approve USDC spending first
             </div>
           )}
         </div>
 
         <Button
           onClick={handleDeploy}
-          disabled={!isConnected || !blogName.trim() || isCreating}
+          disabled={
+            !isConnected ||
+            !blogName.trim() ||
+            isCreating ||
+            isApproving ||
+            !usdcAddress ||
+            !factoryAddress
+          }
           className="w-full gap-2"
           size="lg"
         >
           {!isConnected ? (
             "Connect Wallet to Deploy"
+          ) : isApproving ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Approving USDC...
+            </>
           ) : isCreating ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -132,6 +171,12 @@ export function DeployBlogCard() {
         {!isConnected && (
           <p className="text-center text-xs text-muted-foreground">
             Connect your wallet to deploy a blog
+          </p>
+        )}
+        
+        {isConnected && !factoryAddress && (
+          <p className="text-center text-xs text-yellow-500">
+            ⚠️ Factory contract not deployed on this chain yet
           </p>
         )}
       </div>

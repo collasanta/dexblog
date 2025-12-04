@@ -52,8 +52,18 @@ export function ChainSelector({
 }
 
 function ChainIcon({ chainId }: { chainId: number }) {
-  // Simple colored circle based on chain
-  const colors: Record<number, string> = {
+  // Chain logos from ChainList (open source)
+  // Using llama.fi CDN which hosts chain logos
+  const chainLogos: Record<number, string> = {
+    1: "https://icons.llamao.fi/icons/chains/rsz_ethereum.jpg", // Ethereum
+    137: "https://icons.llamao.fi/icons/chains/rsz_polygon.jpg", // Polygon
+    42161: "https://icons.llamao.fi/icons/chains/rsz_arbitrum.jpg", // Arbitrum
+    10: "https://icons.llamao.fi/icons/chains/rsz_optimism.jpg", // Optimism
+    8453: "https://icons.llamao.fi/icons/chains/rsz_base.jpg", // Base
+    56: "https://icons.llamao.fi/icons/chains/rsz_bsc.jpg", // BSC
+  };
+
+  const fallbackColors: Record<number, string> = {
     1: "bg-[#627EEA]", // Ethereum
     137: "bg-[#8247E5]", // Polygon
     42161: "bg-[#28A0F0]", // Arbitrum
@@ -62,8 +72,30 @@ function ChainIcon({ chainId }: { chainId: number }) {
     56: "bg-[#F0B90B]", // BSC
   };
 
-  return (
-    <div className={`h-4 w-4 rounded-full ${colors[chainId] || "bg-gray-500"}`} />
-  );
+  const logoUrl = chainLogos[chainId];
+  const fallbackColor = fallbackColors[chainId] || "bg-gray-500";
+
+  if (logoUrl) {
+    return (
+      <img
+        src={logoUrl}
+        alt=""
+        className="h-4 w-4 rounded-full object-cover"
+        onError={(e) => {
+          // Fallback to colored circle if image fails to load
+          const target = e.target as HTMLImageElement;
+          target.style.display = "none";
+          const parent = target.parentElement;
+          if (parent) {
+            const fallback = document.createElement("div");
+            fallback.className = `h-4 w-4 rounded-full ${fallbackColor}`;
+            parent.appendChild(fallback);
+          }
+        }}
+      />
+    );
+  }
+
+  return <div className={`h-4 w-4 rounded-full ${fallbackColor}`} />;
 }
 

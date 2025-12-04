@@ -118,7 +118,7 @@ export default function Home() {
           </p>
           <div className="flex items-center gap-6">
             <a
-              href="https://github.com/yourusername/dexblog"
+              href="https://github.com/collasanta/dexblog"
               target="_blank"
               rel="noopener noreferrer"
               className="text-muted-foreground hover:text-primary text-sm transition-colors"

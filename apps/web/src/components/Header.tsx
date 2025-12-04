@@ -25,7 +25,7 @@ export function Header() {
             Dashboard
           </Link>
           <a
-            href="https://github.com/yourusername/dexblog"
+            href="https://github.com/collasanta/dexblog"
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm text-muted-foreground hover:text-primary transition-colors"

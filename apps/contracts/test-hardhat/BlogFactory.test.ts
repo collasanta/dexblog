@@ -3,18 +3,40 @@ import { ethers } from "hardhat";
 import { BlogFactory, Blog } from "../typechain-types";
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
+// Mock ERC20 for testing
+async function deployMockERC20() {
+  const MockERC20 = await ethers.getContractFactory("MockERC20");
+  const mock = await MockERC20.deploy();
+  return mock;
+}
+
 describe("BlogFactory", function () {
   let factory: BlogFactory;
+  let mockUSDC: any;
   let factoryOwner: SignerWithAddress;
   let user1: SignerWithAddress;
   let user2: SignerWithAddress;
 
   const SETUP_FEE = ethers.parseEther("0.02"); // ~$50 equivalent
+  const SETUP_FEE_STABLE = ethers.parseUnits("50", 6); // 50 USDC
 
   beforeEach(async function () {
     [factoryOwner, user1, user2] = await ethers.getSigners();
+    
+    // Deploy mock USDC
+    const MockERC20Factory = await ethers.getContractFactory("MockERC20");
+    mockUSDC = await MockERC20Factory.deploy();
+    
+    // Mint USDC to users
+    await mockUSDC.mint(user1.address, ethers.parseUnits("1000", 6));
+    await mockUSDC.mint(user2.address, ethers.parseUnits("1000", 6));
+    
     const BlogFactory = await ethers.getContractFactory("BlogFactory");
-    factory = await BlogFactory.deploy(SETUP_FEE);
+    factory = await BlogFactory.deploy(
+      SETUP_FEE,
+      await mockUSDC.getAddress(),
+      SETUP_FEE_STABLE
+    );
   });
 
   describe("Constructor", function () {

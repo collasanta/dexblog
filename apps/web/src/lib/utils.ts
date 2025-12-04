@@ -37,3 +37,8 @@ export function formatEther(wei: bigint): string {
   return ether.toFixed(4);
 }
 
+export function formatUnits(value: bigint, decimals: number): string {
+  const units = Number(value) / 10 ** decimals;
+  return units.toFixed(decimals === 6 ? 2 : 4);
+}
+

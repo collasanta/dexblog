@@ -10,18 +10,21 @@ optimizer_runs = 200
 fuzz = { runs = 256 }
 verbosity = 2
 
-# Formatting
+[fmt]
 line_length = 100
 tab_width = 4
 bracket_spacing = true
 
 [rpc_endpoints]
-mainnet = "${MAINNET_RPC_URL}"
-base = "${BASE_RPC_URL}"
-polygon = "${POLYGON_RPC_URL}"
-arbitrum = "${ARBITRUM_RPC_URL}"
-optimism = "${OPTIMISM_RPC_URL}"
-bsc = "${BSC_RPC_URL}"
+# dRPC public endpoints (free)
+mainnet = "https://eth.drpc.org"
+base = "https://base.drpc.org"
+polygon = "https://polygon.drpc.org"
+arbitrum = "https://arbitrum.drpc.org"
+optimism = "https://optimism.drpc.org"
+bsc = "https://bsc.drpc.org"
+# Local
+localhost = "http://127.0.0.1:8545"
 
 [etherscan]
 mainnet = { key = "${ETHERSCAN_API_KEY}" }
