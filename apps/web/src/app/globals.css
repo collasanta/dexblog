@@ -1,0 +1,133 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 4%;
+    --foreground: 0 0% 100%;
+    --card: 0 0% 100% / 0.05;
+    --card-foreground: 0 0% 100%;
+    --primary: 165 91% 52%;
+    --primary-foreground: 0 0% 4%;
+    --secondary: 240 30% 14%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 10%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 165 91% 52%;
+    --accent-foreground: 0 0% 4%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 165 91% 52% / 0.2;
+    --input: 0 0% 100% / 0.1;
+    --ring: 165 91% 52%;
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(20, 244, 201, 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(20, 244, 201, 0.5);
+}
+
+/* Glassmorphism utility */
+.glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(20, 244, 201, 0.1);
+}
+
+.glass-hover:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(20, 244, 201, 0.2);
+}
+
+/* Glow effects */
+.glow {
+  box-shadow: 0 0 20px rgba(20, 244, 201, 0.3);
+}
+
+.glow-text {
+  text-shadow: 0 0 20px rgba(20, 244, 201, 0.5);
+}
+
+/* Animated gradient background */
+.gradient-bg {
+  background: radial-gradient(
+      ellipse 80% 50% at 50% -20%,
+      rgba(20, 244, 201, 0.15),
+      transparent
+    ),
+    radial-gradient(
+      ellipse 60% 40% at 80% 50%,
+      rgba(20, 244, 201, 0.08),
+      transparent
+    ),
+    radial-gradient(
+      ellipse 50% 30% at 20% 80%,
+      rgba(20, 244, 201, 0.05),
+      transparent
+    );
+}
+
+/* Focus ring */
+.focus-ring:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(20, 244, 201, 0.5);
+}
+
+/* Markdown content styles */
+.prose-dark {
+  @apply text-gray-200;
+}
+
+.prose-dark h1,
+.prose-dark h2,
+.prose-dark h3,
+.prose-dark h4 {
+  @apply text-white font-semibold;
+}
+
+.prose-dark a {
+  @apply text-primary hover:text-primary-400;
+}
+
+.prose-dark code {
+  @apply bg-muted px-1.5 py-0.5 rounded text-primary;
+}
+
+.prose-dark pre {
+  @apply bg-muted rounded-lg p-4 overflow-x-auto;
+}
+
+.prose-dark blockquote {
+  @apply border-l-4 border-primary pl-4 italic text-muted-foreground;
+}
+
