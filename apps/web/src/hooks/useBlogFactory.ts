@@ -16,7 +16,7 @@ import {
   ERC20_ABI,
 } from "@/lib/contracts";
 import { useState, useEffect } from "react";
-import { parseUnits, formatUnits } from "viem";
+import { parseUnits, formatUnits, decodeEventLog } from "viem";
 
 export function useBlogFactory() {
   const chainId = useChainId();
@@ -118,7 +118,7 @@ export function useBlogFactory() {
     estimateGasCost();
   }, [publicClient, address, estimatedGas]);
 
-  const createBlog = async (name: string): Promise<string | null> => {
+  const createBlog = async (name: string): Promise<{ blogAddress: string; txHash: string } | null> => {
     if (!factoryAddress) {
       console.error("Factory not deployed on this chain. Please deploy the factory first.");
       throw new Error("Factory contract not deployed on this chain");
@@ -155,7 +155,43 @@ export function useBlogFactory() {
         });
 
         console.log("Transaction hash:", hash);
-        return hash;
+        
+        // Wait for transaction receipt
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        
+        if (receipt.status !== "success") {
+          throw new Error("Transaction failed");
+        }
+
+        // Extract blog address from BlogCreated event
+        const blogCreatedEvent = receipt.logs.find((log) => {
+          try {
+            // Try to decode the event
+            const decoded = decodeEventLog({
+              abi: FACTORY_ABI,
+              data: log.data,
+              topics: log.topics,
+            });
+            return decoded.eventName === "BlogCreated";
+          } catch {
+            return false;
+          }
+        });
+
+        if (blogCreatedEvent) {
+          const decoded = decodeEventLog({
+            abi: FACTORY_ABI,
+            data: blogCreatedEvent.data,
+            topics: blogCreatedEvent.topics,
+          });
+          const blogAddress = (decoded.args as any).blogAddress;
+          console.log("Blog created at address:", blogAddress);
+          return { blogAddress: blogAddress as string, txHash: hash };
+        }
+
+        // Fallback: if we can't find the event, return null
+        console.warn("Could not find BlogCreated event in receipt");
+        return null;
       } catch (error) {
         console.error("Failed to create blog as owner:", error);
         throw error;
@@ -231,7 +267,43 @@ export function useBlogFactory() {
       });
 
       console.log("Transaction hash:", hash);
-      return hash;
+      
+      // Wait for transaction receipt
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      
+      if (receipt.status !== "success") {
+        throw new Error("Transaction failed");
+      }
+
+      // Extract blog address from BlogCreated event
+      const blogCreatedEvent = receipt.logs.find((log) => {
+        try {
+          // Try to decode the event
+          const decoded = decodeEventLog({
+            abi: FACTORY_ABI,
+            data: log.data,
+            topics: log.topics,
+          });
+          return decoded.eventName === "BlogCreated";
+        } catch {
+          return false;
+        }
+      });
+
+      if (blogCreatedEvent) {
+        const decoded = decodeEventLog({
+          abi: FACTORY_ABI,
+          data: blogCreatedEvent.data,
+          topics: blogCreatedEvent.topics,
+        });
+          const blogAddress = (decoded.args as any).blogAddress;
+          console.log("Blog created at address:", blogAddress);
+          return { blogAddress: blogAddress as string, txHash: hash };
+      }
+
+      // Fallback: if we can't find the event, return null
+      console.warn("Could not find BlogCreated event in receipt");
+      return null;
     } catch (error) {
       console.error("Failed to create blog with stablecoin:", error);
       throw error;
