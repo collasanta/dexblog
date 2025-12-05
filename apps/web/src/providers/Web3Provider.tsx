@@ -6,6 +6,7 @@ import { config } from "@/lib/wagmi";
 import { useState, useEffect } from "react";
 
 export function Web3Provider({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -18,8 +19,15 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
       })
   );
 
+  // Ensure we're mounted on the client before rendering children
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Handle WalletConnect errors gracefully
   useEffect(() => {
+    if (!mounted) return;
+
     const handleError = (error: Error) => {
       // Ignore WalletConnect connection errors - they're not critical
       if (error.message?.includes("Connection interrupted") || 
@@ -54,7 +62,12 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
       window.removeEventListener("error", handleError as any);
       window.removeEventListener("unhandledrejection", handleError as any);
     };
-  }, []);
+  }, [mounted]);
+
+  // Don't render children until mounted on client
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <WagmiProvider config={config}>

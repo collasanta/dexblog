@@ -53,13 +53,17 @@ describe("BlogFactory", function () {
   });
 
   describe("Create Blog", function () {
-    it("should create a blog", async function () {
-      const tx = await factory.connect(user1).createBlog("My Blog", {
-        value: SETUP_FEE,
-      });
+    it("should create a blog with USDC payment", async function () {
+      // Approve USDC first
+      await mockUSDC.connect(user1).approve(await factory.getAddress(), SETUP_FEE_STABLE);
+      
+      const tx = await factory.connect(user1).createBlog("My Blog");
       const receipt = await tx.wait();
 
       expect(await factory.totalBlogs()).to.equal(1);
+      
+      // Verify USDC was transferred
+      expect(await mockUSDC.balanceOf(await factory.getAddress())).to.equal(SETUP_FEE_STABLE);
 
       // Get blog address from event
       const event = receipt?.logs.find((log) => {
@@ -80,48 +84,58 @@ describe("BlogFactory", function () {
     });
 
     it("should emit BlogCreated event", async function () {
+      await mockUSDC.connect(user1).approve(await factory.getAddress(), SETUP_FEE_STABLE);
       await expect(
-        factory.connect(user1).createBlog("My Blog", { value: SETUP_FEE })
+        factory.connect(user1).createBlog("My Blog")
       ).to.emit(factory, "BlogCreated");
     });
 
     it("should create multiple blogs", async function () {
-      await factory.connect(user1).createBlog("Blog 1", { value: SETUP_FEE });
-      await factory.connect(user2).createBlog("Blog 2", { value: SETUP_FEE });
-      await factory.connect(user1).createBlog("Blog 3", { value: SETUP_FEE });
+      await mockUSDC.connect(user1).approve(await factory.getAddress(), SETUP_FEE_STABLE * 2n);
+      await mockUSDC.connect(user2).approve(await factory.getAddress(), SETUP_FEE_STABLE);
+      
+      await factory.connect(user1).createBlog("Blog 1");
+      await factory.connect(user2).createBlog("Blog 2");
+      await factory.connect(user1).createBlog("Blog 3");
 
       expect(await factory.totalBlogs()).to.equal(3);
+      expect(await mockUSDC.balanceOf(await factory.getAddress())).to.equal(SETUP_FEE_STABLE * 3n);
     });
 
-    it("should revert when insufficient fee", async function () {
+    it("should revert when insufficient USDC approval", async function () {
+      await mockUSDC.connect(user1).approve(await factory.getAddress(), SETUP_FEE_STABLE - 1n);
+      
       await expect(
-        factory.connect(user1).createBlog("My Blog", {
-          value: SETUP_FEE - 1n,
-        })
-      ).to.be.revertedWith("Insufficient setup fee");
+        factory.connect(user1).createBlog("My Blog")
+      ).to.be.revertedWith("Payment failed");
     });
 
-    it("should accept excess fee", async function () {
-      await factory.connect(user1).createBlog("My Blog", {
-        value: SETUP_FEE + ethers.parseEther("1"),
-      });
-      expect(await factory.totalBlogs()).to.equal(1);
+    it("should revert when no USDC approval", async function () {
+      await expect(
+        factory.connect(user1).createBlog("My Blog")
+      ).to.be.revertedWith("Payment failed");
     });
 
     it("should work with zero fee factory", async function () {
       const BlogFactory = await ethers.getContractFactory("BlogFactory");
-      const freeFactory = await BlogFactory.deploy(0);
+      const freeFactory = await BlogFactory.deploy(
+        await mockUSDC.getAddress(),
+        0
+      );
 
-      await freeFactory.connect(user1).createBlog("Free Blog", { value: 0 });
+      await freeFactory.connect(user1).createBlog("Free Blog");
       expect(await freeFactory.totalBlogs()).to.equal(1);
     });
   });
 
   describe("Get Blogs By Owner", function () {
     it("should return blogs by owner", async function () {
-      await factory.connect(user1).createBlog("Blog 1", { value: SETUP_FEE });
-      await factory.connect(user1).createBlog("Blog 2", { value: SETUP_FEE });
-      await factory.connect(user2).createBlog("Blog 3", { value: SETUP_FEE });
+      await mockUSDC.connect(user1).approve(await factory.getAddress(), SETUP_FEE_STABLE * 2n);
+      await mockUSDC.connect(user2).approve(await factory.getAddress(), SETUP_FEE_STABLE);
+      
+      await factory.connect(user1).createBlog("Blog 1");
+      await factory.connect(user1).createBlog("Blog 2");
+      await factory.connect(user2).createBlog("Blog 3");
 
       const user1Blogs = await factory.getBlogsByOwner(user1.address);
       const user2Blogs = await factory.getBlogsByOwner(user2.address);
@@ -137,30 +151,26 @@ describe("BlogFactory", function () {
   });
 
   describe("Withdraw", function () {
-    it("should withdraw collected fees", async function () {
-      await factory.connect(user1).createBlog("Blog 1", { value: SETUP_FEE });
-      await factory.connect(user2).createBlog("Blog 2", { value: SETUP_FEE });
+    it("should withdraw collected USDC fees", async function () {
+      await mockUSDC.connect(user1).approve(await factory.getAddress(), SETUP_FEE_STABLE);
+      await mockUSDC.connect(user2).approve(await factory.getAddress(), SETUP_FEE_STABLE);
+      
+      await factory.connect(user1).createBlog("Blog 1");
+      await factory.connect(user2).createBlog("Blog 2");
 
-      const balanceBefore = await ethers.provider.getBalance(
-        factoryOwner.address
-      );
+      const balanceBefore = await mockUSDC.balanceOf(factoryOwner.address);
 
-      const tx = await factory.withdraw();
-      const receipt = await tx.wait();
-      const gasUsed = receipt!.gasUsed * receipt!.gasPrice;
+      await factory.withdraw();
 
-      const balanceAfter = await ethers.provider.getBalance(
-        factoryOwner.address
-      );
+      const balanceAfter = await mockUSDC.balanceOf(factoryOwner.address);
 
-      expect(balanceAfter).to.equal(
-        balanceBefore + SETUP_FEE * 2n - gasUsed
-      );
-      expect(await ethers.provider.getBalance(await factory.getAddress())).to.equal(0);
+      expect(balanceAfter).to.equal(balanceBefore + SETUP_FEE_STABLE * 2n);
+      expect(await mockUSDC.balanceOf(await factory.getAddress())).to.equal(0);
     });
 
     it("should revert when non-owner withdraws", async function () {
-      await factory.connect(user1).createBlog("Blog 1", { value: SETUP_FEE });
+      await mockUSDC.connect(user1).approve(await factory.getAddress(), SETUP_FEE_STABLE);
+      await factory.connect(user1).createBlog("Blog 1");
 
       await expect(factory.connect(user1).withdraw()).to.be.revertedWith(
         "Not owner"
@@ -170,7 +180,7 @@ describe("BlogFactory", function () {
 
   describe("Set Setup Fee", function () {
     it("should update setup fee", async function () {
-      const newFee = ethers.parseEther("0.05");
+      const newFee = ethers.parseUnits("20", 6); // 20 USDC
       await factory.setSetupFee(newFee);
       expect(await factory.setupFee()).to.equal(newFee);
     });
@@ -179,13 +189,13 @@ describe("BlogFactory", function () {
       await factory.setSetupFee(0);
       expect(await factory.setupFee()).to.equal(0);
 
-      await factory.connect(user1).createBlog("Free Blog", { value: 0 });
+      await factory.connect(user1).createBlog("Free Blog");
       expect(await factory.totalBlogs()).to.equal(1);
     });
 
     it("should revert when non-owner sets fee", async function () {
       await expect(
-        factory.connect(user1).setSetupFee(ethers.parseEther("0.1"))
+        factory.connect(user1).setSetupFee(ethers.parseUnits("0.1", 6))
       ).to.be.revertedWith("Not owner");
     });
   });
@@ -209,18 +219,17 @@ describe("BlogFactory", function () {
     });
 
     it("should allow new owner to withdraw", async function () {
-      await factory.connect(user1).createBlog("Blog", { value: SETUP_FEE });
+      await mockUSDC.connect(user1).approve(await factory.getAddress(), SETUP_FEE_STABLE);
+      await factory.connect(user1).createBlog("Blog");
       await factory.transferFactoryOwnership(user2.address);
 
-      const balanceBefore = await ethers.provider.getBalance(user2.address);
+      const balanceBefore = await mockUSDC.balanceOf(user2.address);
 
-      const tx = await factory.connect(user2).withdraw();
-      const receipt = await tx.wait();
-      const gasUsed = receipt!.gasUsed * receipt!.gasPrice;
+      await factory.connect(user2).withdraw();
 
-      const balanceAfter = await ethers.provider.getBalance(user2.address);
+      const balanceAfter = await mockUSDC.balanceOf(user2.address);
 
-      expect(balanceAfter).to.equal(balanceBefore + SETUP_FEE - gasUsed);
+      expect(balanceAfter).to.equal(balanceBefore + SETUP_FEE_STABLE);
     });
   });
 

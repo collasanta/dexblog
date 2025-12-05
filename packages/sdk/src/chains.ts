@@ -22,11 +22,11 @@ export interface DexBlogChainConfig {
  */
 export const FACTORY_ADDRESSES: Record<number, string> = {
   1: "0x0000000000000000000000000000000000000000", // Ethereum Mainnet - Not deployed yet
-  10: "0x0000000000000000000000000000000000000000", // Optimism - Not deployed yet
-  56: "0x0000000000000000000000000000000000000000", // BSC - Not deployed yet
+  10: "0x96e8005727eCAd421B4cdded7B08d240f522D96E", // ✅ Optimism Mainnet
+  56: "0x96e8005727eCAd421B4cdded7B08d240f522D96E", // ✅ BNB Smart Chain
   137: "0x0000000000000000000000000000000000000000", // Polygon - Not deployed yet
-  8453: "0x0000000000000000000000000000000000000000", // Base - Not deployed yet
-  42161: "0x832228e0609aa22eF506577AA71C973B96353b70", // ✅ Arbitrum Mainnet
+  8453: "0x8Ccc0Bb6AF35F9067A7110Ac50666159e399A5F3", // ✅ Base Mainnet
+  42161: "0x243924EEE57aa31832A957c11416AB34f5009a67", // ✅ Arbitrum Mainnet (with ArbSys L2 blockNumber fix)
   421614: "0xccb9EFF798D12D78d179c81aEC83c9E9F974013B", // ✅ Arbitrum Sepolia
 };
 

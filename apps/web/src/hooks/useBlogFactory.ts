@@ -16,14 +16,17 @@ import {
   ERC20_ABI,
 } from "@/lib/contracts";
 import { useState, useEffect } from "react";
-import { parseUnits, formatUnits, decodeEventLog } from "viem";
+import { parseUnits, formatUnits, decodeEventLog, getAddress } from "viem";
+import { useQuery } from "@tanstack/react-query";
 
 export function useBlogFactory() {
   const chainId = useChainId();
   const { address } = useAccount();
   const publicClient = usePublicClient();
-  const factoryAddress = getFactoryAddress(chainId);
-  const usdcAddress = getUSDCAddress(chainId);
+  const factoryAddressRaw = getFactoryAddress(chainId);
+  const factoryAddress = factoryAddressRaw ? (getAddress(factoryAddressRaw) as `0x${string}`) : null;
+  const usdcAddressRaw = getUSDCAddress(chainId);
+  const usdcAddress = usdcAddressRaw ? (getAddress(usdcAddressRaw) as `0x${string}`) : null;
   const [isCreating, setIsCreating] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
 
@@ -67,15 +70,44 @@ export function useBlogFactory() {
     },
   });
 
-  const { data: usdcBalance } = useReadContract({
-    address: usdcAddress || undefined,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: {
-      enabled: !!usdcAddress && !!address,
+  // Fetch USDC balance using publicClient directly (works better with proxy contracts)
+  const { data: usdcBalance, error: usdcBalanceError } = useQuery({
+    queryKey: ["usdc-balance-factory", usdcAddress, address, chainId],
+    queryFn: async () => {
+      if (!publicClient || !usdcAddress || !address) return null;
+      
+      try {
+        const balance = await publicClient.readContract({
+          address: usdcAddress,
+          abi: ERC20_ABI,
+          functionName: "balanceOf",
+          args: [address as `0x${string}`],
+        });
+        return balance as bigint;
+      } catch (error) {
+        console.error("[useBlogFactory] Error reading USDC balance:", error);
+        throw error;
+      }
     },
+    enabled: !!publicClient && !!usdcAddress && !!address,
+    refetchInterval: 5000, // Refetch every 5 seconds
   });
+
+  // Debug logging
+  useEffect(() => {
+    if (usdcBalanceError) {
+      console.error("[useBlogFactory] Error fetching USDC balance:", usdcBalanceError);
+    }
+    if (usdcAddress && address) {
+      console.log("[useBlogFactory] USDC balance:", {
+        chainId,
+        usdcAddress,
+        userAddress: address,
+        balance: usdcBalance?.toString(),
+        error: usdcBalanceError,
+      });
+    }
+  }, [usdcAddress, address, usdcBalance, usdcBalanceError, chainId, publicClient]);
 
   // Check native ETH balance for gas
   const { data: nativeBalance } = useBalance({
@@ -121,7 +153,7 @@ export function useBlogFactory() {
   const createBlog = async (name: string): Promise<{ blogAddress: string; txHash: string } | null> => {
     if (!factoryAddress) {
       console.error("Factory not deployed on this chain. Please deploy the factory first.");
-      throw new Error("Factory contract not deployed on this chain");
+      throw new Error("Factory contract not deployed on this chain, send an email to victor.collasanta@gmail.com and he will add this chain");
     }
     
     if (!address || !publicClient) {
@@ -131,7 +163,7 @@ export function useBlogFactory() {
 
     // Validate factory address is not zero
     if (factoryAddress === "0x0000000000000000000000000000000000000000") {
-      throw new Error("Factory contract not deployed on this chain");
+      throw new Error("Factory contract not deployed on this chain, send an email to victor.collasanta@gmail.com and he will add this chain");
     }
 
     // Check if user is factory owner - if so, create blog for free
@@ -157,8 +189,12 @@ export function useBlogFactory() {
 
         console.log("Transaction hash:", hash);
         
-        // Wait for transaction receipt
-        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        // Wait for transaction receipt with extended timeout for Base
+        const receipt = await publicClient.waitForTransactionReceipt({ 
+          hash,
+          timeout: 120000, // 2 minutes timeout for Base
+          pollingInterval: 2000, // Poll every 2 seconds
+        });
         
         if (receipt.status !== "success") {
           throw new Error("Transaction failed");

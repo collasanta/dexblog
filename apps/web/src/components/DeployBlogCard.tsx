@@ -1,11 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAccount, useChainId } from "wagmi";
 import { GlassCard } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { ChainSelector } from "./ChainSelector";
 import { useBlogFactory } from "@/hooks/useBlogFactory";
 import { Rocket, Loader2, CheckCircle, ExternalLink, Coins, Info } from "lucide-react";
@@ -19,6 +27,8 @@ export function DeployBlogCard() {
   const chainId = useChainId();
   const [blogName, setBlogName] = useState("");
   const [deploymentResult, setDeploymentResult] = useState<{ blogAddress: string; txHash: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [showFactoryDialog, setShowFactoryDialog] = useState(false);
 
   const {
     setupFee,
@@ -37,18 +47,31 @@ export function DeployBlogCard() {
   const handleDeploy = async () => {
     if (!blogName.trim()) return;
 
+    // Check if factory is not deployed
+    if (!factoryAddress) {
+      setShowFactoryDialog(true);
+      return;
+    }
+
+    setError(null); // Clear previous errors
+
     try {
       // createBlog already handles approve automatically
       const result = await createBlog(blogName);
       if (result) {
         setDeploymentResult(result);
         setBlogName("");
+        setError(null);
       }
     } catch (error) {
       console.error("Failed to create blog:", error);
-      // Show error to user
-      alert(error instanceof Error ? error.message : "Failed to create blog. Please try again.");
+      const errorMessage = error instanceof Error ? error.message : "Failed to create blog. Please try again.";
+      setError(errorMessage);
     }
+  };
+
+  const handleEmailClick = () => {
+    window.location.href = "mailto:victor.collasanta@gmail.com?subject=Chain Support Request&body=Hi, I would like to request support for a chain on DexBlog.";
   };
 
   if (deploymentResult) {
@@ -126,7 +149,7 @@ export function DeployBlogCard() {
                 <span className="font-mono text-primary font-semibold">
                   {isLoadingFee
                     ? "..."
-                    : `${formatUnits(setupFee, USDC_DECIMALS[chainId] || 6)} USDC`}
+                    : `${Number(formatUnits(setupFee, USDC_DECIMALS[chainId] || 6)).toFixed(2)} USDC`}
                 </span>
               </p>
               <div className="group relative">
@@ -175,6 +198,13 @@ export function DeployBlogCard() {
               )}
             </>
           )}
+
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-sm text-red-500">
+              <p className="font-semibold mb-2">⚠️ Error</p>
+              <p>{error}</p>
+            </div>
+          )}
         </div>
 
         <Button
@@ -215,13 +245,43 @@ export function DeployBlogCard() {
             Connect your wallet to deploy a blog
           </p>
         )}
-        
-        {isConnected && !factoryAddress && (
-          <p className="text-center text-xs text-yellow-500">
-            ⚠️ Factory contract not deployed on this chain yet
-          </p>
-        )}
       </div>
+
+      <Dialog open={showFactoryDialog} onOpenChange={setShowFactoryDialog}>
+        <DialogContent onClose={() => setShowFactoryDialog(false)}>
+          <DialogHeader>
+            <DialogTitle>Factory Not Deployed</DialogTitle>
+            <DialogDescription>
+              Factory contract not deployed on this chain, send an email to{" "}
+              <a
+                href="mailto:victor.collasanta@gmail.com"
+                className="text-primary underline hover:no-underline"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleEmailClick();
+                }}
+              >
+                victor.collasanta@gmail.com
+              </a>
+              {" "}and he will add this chain
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowFactoryDialog(false)}
+            >
+              Close
+            </Button>
+            <Button onClick={() => {
+              handleEmailClick();
+              setShowFactoryDialog(false);
+            }}>
+              Send Email
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </GlassCard>
   );
 }

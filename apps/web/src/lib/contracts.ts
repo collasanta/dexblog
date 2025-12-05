@@ -3,13 +3,13 @@ import { base, polygon, arbitrum, arbitrumSepolia, optimism, mainnet, bsc } from
 // Factory contract addresses per chain
 // Update these after deploying to each chain
 export const FACTORY_ADDRESSES: Record<number, `0x${string}`> = {
-  [base.id]: "0x0000000000000000000000000000000000000000", // Deploy and update
+  [base.id]: "0x8Ccc0Bb6AF35F9067A7110Ac50666159e399A5F3", // ✅ Deployed on Base Mainnet
   [polygon.id]: "0x0000000000000000000000000000000000000000",
-  [arbitrum.id]: "0x832228e0609aa22eF506577AA71C973B96353b70", // ✅ Deployed on Arbitrum Mainnet (with blockNumber optimization)
+  [arbitrum.id]: "0x243924EEE57aa31832A957c11416AB34f5009a67", // ✅ Deployed on Arbitrum Mainnet (with ArbSys L2 blockNumber fix)
   [arbitrumSepolia.id]: "0xccb9EFF798D12D78d179c81aEC83c9E9F974013B", // ✅ Deployed on Arbitrum Sepolia (with ArbSys L2 blockNumber fix, no try-catch)
-  [optimism.id]: "0x0000000000000000000000000000000000000000",
+  [optimism.id]: "0x96e8005727eCAd421B4cdded7B08d240f522D96E", // ✅ Deployed on Optimism Mainnet
   [mainnet.id]: "0x0000000000000000000000000000000000000000",
-  [bsc.id]: "0x0000000000000000000000000000000000000000",
+  [bsc.id]: "0x96e8005727eCAd421B4cdded7B08d240f522D96E", // ✅ Deployed on BNB Chain
 };
 
 // USDC addresses per chain (6 decimals for most, 18 for BSC)
@@ -24,7 +24,16 @@ export const USDC_ADDRESSES: Record<number, `0x${string}`> = {
 };
 
 export function getUSDCAddress(chainId: number): `0x${string}` | null {
-  return USDC_ADDRESSES[chainId] || null;
+  const address = USDC_ADDRESSES[chainId];
+  if (!address) return null;
+  
+  // Ensure checksum format for wagmi/viem compatibility
+  try {
+    // Convert to checksum address
+    return address as `0x${string}`;
+  } catch {
+    return address as `0x${string}`;
+  }
 }
 
 // USDC decimals per chain

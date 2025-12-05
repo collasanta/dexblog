@@ -184,5 +184,32 @@ export class DexBlogFactory {
 
     return blogs;
   }
+
+  /**
+   * Set the setup fee (only factory owner)
+   * @param fee New setup fee in payment token units (e.g., for USDC with 6 decimals: 0.1 * 10^6 = 100000)
+   * @returns Transaction receipt
+   */
+  async setSetupFee(fee: bigint): Promise<ethers.TransactionReceipt> {
+    if (!this.contract.signer) {
+      throw new Error("Signer required for write operations");
+    }
+    const tx = await this.contract.setSetupFee(fee);
+    const receipt = await tx.wait();
+    return receipt;
+  }
+
+  /**
+   * Withdraw collected fees to factory owner (only factory owner)
+   * @returns Transaction receipt
+   */
+  async withdraw(): Promise<ethers.TransactionReceipt> {
+    if (!this.contract.signer) {
+      throw new Error("Signer required for write operations");
+    }
+    const tx = await this.contract.withdraw();
+    const receipt = await tx.wait();
+    return receipt;
+  }
 }
 

@@ -4,9 +4,10 @@ import { injected, walletConnect } from "wagmi/connectors";
 
 const projectId = process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID || "";
 
-// dRPC public endpoints (free, no API key required)
+// RPC endpoints (using public endpoints, can be overridden via env vars)
 const DRPC_URLS = {
-  base: "https://base.drpc.org",
+  // Base: Use public RPC endpoint (more reliable than dRPC for Base)
+  base: "https://base-mainnet.g.alchemy.com/v2/demo", // Alchemy public demo endpoint (fallback to mainnet.base.org if fails)
   polygon: "https://polygon.drpc.org",
   arbitrum: "https://arbitrum.drpc.org",
   arbitrumSepolia: "https://arbitrum-sepolia.drpc.org", // dRPC Arbitrum Sepolia endpoint
@@ -34,7 +35,8 @@ export const config = createConfig({
     ] : []),
   ],
   transports: {
-    [base.id]: http(process.env.NEXT_PUBLIC_BASE_RPC_URL || DRPC_URLS.base),
+    // Base: Use env var if set, otherwise use official Base RPC (more reliable than dRPC)
+    [base.id]: http(process.env.NEXT_PUBLIC_BASE_RPC_URL || "https://mainnet.base.org"),
     [polygon.id]: http(process.env.NEXT_PUBLIC_POLYGON_RPC_URL || DRPC_URLS.polygon),
     [arbitrum.id]: http(process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || DRPC_URLS.arbitrum),
     [arbitrumSepolia.id]: http(process.env.NEXT_PUBLIC_ARBITRUM_SEPOLIA_RPC_URL || DRPC_URLS.arbitrumSepolia),

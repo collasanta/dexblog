@@ -29,8 +29,8 @@ const config: HardhatUserConfig = {
       url: "http://127.0.0.1:8545",
     },
     base: {
-      url: process.env.BASE_RPC_URL || "",
-      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      url: process.env.BASE_RPC_URL || "https://mainnet.base.org",
+      accounts: (process.env.PRIVATE_KEY || process.env.DEPLOYER) ? [(process.env.PRIVATE_KEY || process.env.DEPLOYER)!] : [],
     },
     polygon: {
       url: process.env.POLYGON_RPC_URL || "",
@@ -46,8 +46,13 @@ const config: HardhatUserConfig = {
       chainId: 421614,
     },
     optimism: {
-      url: process.env.OPTIMISM_RPC_URL || "",
-      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      url: process.env.OPTIMISM_RPC_URL || "https://mainnet.optimism.io",
+      accounts: (process.env.PRIVATE_KEY || process.env.DEPLOYER) ? [(process.env.PRIVATE_KEY || process.env.DEPLOYER)!] : [],
+    },
+    bsc: {
+      url: process.env.BSC_RPC_URL || "https://bsc.drpc.org",
+      accounts: (process.env.PRIVATE_KEY || process.env.DEPLOYER) ? [(process.env.PRIVATE_KEY || process.env.DEPLOYER)!] : [],
+      chainId: 56,
     },
   },
   etherscan: {
@@ -56,6 +61,7 @@ const config: HardhatUserConfig = {
       polygon: process.env.POLYGONSCAN_API_KEY || "",
       arbitrumOne: process.env.ARBISCAN_API_KEY || "",
       optimisticEthereum: process.env.OPTIMISM_ETHERSCAN_API_KEY || "",
+      bsc: process.env.BSCSCAN_API_KEY || "",
     },
   },
   gasReporter: {
