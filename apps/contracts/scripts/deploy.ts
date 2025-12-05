@@ -1,10 +1,14 @@
 import { ethers } from "hardhat";
+import * as dotenv from "dotenv";
+
+dotenv.config();
 
 // USDC addresses per chain
 const USDC_ADDRESSES: Record<string, string> = {
   base: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
   polygon: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
   arbitrum: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+  arbitrumSepolia: "0x75faf114eafb1BDbe2F0316DF893fd58cE87D3E1", // Arbitrum Sepolia USDC (checksum will be fixed by ethers)
   optimism: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
   mainnet: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
 };
@@ -17,13 +21,22 @@ async function main() {
   const SETUP_FEE = ethers.parseUnits("10", 6); // 10 USDC (6 decimals)
   
   // Get USDC address for current network
-  const usdcAddress = USDC_ADDRESSES[networkName] || USDC_ADDRESSES.base;
+  let usdcAddressRaw = USDC_ADDRESSES[networkName] || USDC_ADDRESSES.base;
+  // Fix checksum for ethers.js (convert to lowercase first, then getAddress will fix checksum)
+  const usdcAddress = ethers.getAddress(usdcAddressRaw.toLowerCase());
 
   console.log("Deploying BlogFactory...");
   console.log("Network:", networkName);
   console.log("Setup fee:", ethers.formatUnits(SETUP_FEE, 6), "USDC");
   console.log("USDC address:", usdcAddress);
 
+  const signers = await ethers.getSigners();
+  if (signers.length === 0) {
+    throw new Error("No signers available. Please configure PRIVATE_KEY or DEPLOYER in .env");
+  }
+  const deployer = signers[0];
+  console.log("Deploying with account:", deployer.address);
+  
   const BlogFactory = await ethers.getContractFactory("BlogFactory");
   const factory = await BlogFactory.deploy(usdcAddress, SETUP_FEE);
 

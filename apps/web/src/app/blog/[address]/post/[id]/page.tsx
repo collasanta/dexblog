@@ -11,8 +11,10 @@ import { EditPostForm } from "@/components/EditPostForm";
 import { formatDate, truncateAddress } from "@/lib/utils";
 import { Loader2, ArrowLeft, Clock, User, ExternalLink, Edit2, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { useAccount } from "wagmi";
+import rehypeHighlight from "rehype-highlight";
+import { useAccount, useChainId } from "wagmi";
 import { useRouter } from "next/navigation";
+import { getChainById } from "@/lib/chains";
 
 interface PostPageProps {
   params: { address: string; id: string };
@@ -23,6 +25,7 @@ export default function PostPage({ params }: PostPageProps) {
   const blogAddress = address as `0x${string}`;
   const postId = parseInt(id);
   const router = useRouter();
+  const chainId = useChainId();
   const { address: connectedAddress } = useAccount();
   const [isEditing, setIsEditing] = useState(false);
 
@@ -51,7 +54,7 @@ export default function PostPage({ params }: PostPageProps) {
     <main className="min-h-screen gradient-bg">
       <Header />
 
-      <div className="container mx-auto px-4 pt-24 pb-12 max-w-3xl">
+      <div className="container mx-auto px-4 sm:px-6 pt-24 pb-12 max-w-3xl">
         <Link href={`/blog/${address}`}>
           <Button variant="ghost" className="mb-6 gap-2">
             <ArrowLeft className="h-4 w-4" />
@@ -82,12 +85,12 @@ export default function PostPage({ params }: PostPageProps) {
         ) : (
           <article>
             <header className="mb-8">
-              <div className="flex items-start justify-between mb-4">
-                <h1 className="text-3xl md:text-4xl font-bold flex-1">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold flex-1 break-words">
                   {post.title}
                 </h1>
                 {isOwner && (
-                  <div className="flex items-center gap-2 ml-4">
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     <Button
                       variant="outline"
                       size="sm"
@@ -95,7 +98,7 @@ export default function PostPage({ params }: PostPageProps) {
                       className="gap-2"
                     >
                       <Edit2 className="h-4 w-4" />
-                      Edit
+                      <span className="hidden sm:inline">Edit</span>
                     </Button>
                     <Button
                       variant="outline"
@@ -109,37 +112,50 @@ export default function PostPage({ params }: PostPageProps) {
                       ) : (
                         <Trash2 className="h-4 w-4" />
                       )}
-                      Delete
+                      <span className="hidden sm:inline">Delete</span>
                     </Button>
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 text-sm text-muted-foreground">
                 <div className="flex items-center gap-1">
-                  <Clock className="h-4 w-4" />
-                  {formatDate(post.timestamp)}
+                  <Clock className="h-4 w-4 flex-shrink-0" />
+                  <span className="break-words">{formatDate(post.timestamp)}</span>
                 </div>
-                <div className="flex items-center gap-1">
-                  <User className="h-4 w-4" />
-                  {truncateAddress(post.author)}
+                <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
+                  <div className="flex items-center gap-1">
+                    <User className="h-4 w-4 flex-shrink-0" />
+                    <span className="break-all">{truncateAddress(post.author)}</span>
+                  </div>
+                  {post.transactionHash ? (
+                    <a
+                      href={`${getChainById(chainId)?.blockExplorers?.default.url}/tx/${post.transactionHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 hover:text-primary transition-colors break-all"
+                    >
+                      <ExternalLink className="h-4 w-4 flex-shrink-0" />
+                      <span className="hidden sm:inline text-muted-foreground">Blockchain Record:</span>
+                      <span className="sm:hidden text-muted-foreground">Record:</span>
+                      <span className="break-all">{truncateAddress(post.transactionHash, 6)}</span>
+                    </a>
+                  ) : (
+                    <div className="flex items-center gap-1 text-muted-foreground/50">
+                      <ExternalLink className="h-4 w-4 flex-shrink-0" />
+                      <span className="hidden sm:inline text-muted-foreground/50">Blockchain Record:</span>
+                      <span className="sm:hidden text-muted-foreground/50">Record:</span>
+                      <div className="h-4 w-24 bg-muted/50 rounded animate-pulse" />
+                    </div>
+                  )}
                 </div>
-                {post.transactionHash && (
-                  <a
-                    href={`https://arbiscan.io/tx/${post.transactionHash}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 hover:text-primary transition-colors"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    View on Explorer
-                  </a>
-                )}
               </div>
             </header>
 
-            <GlassCard className="p-8">
-              <div className="prose-dark prose prose-lg max-w-none">
-                <ReactMarkdown>{post.body}</ReactMarkdown>
+            <GlassCard className="p-4 sm:p-6 md:p-8">
+              <div className="prose-dark prose prose-sm sm:prose-base md:prose-lg max-w-none break-words overflow-wrap-anywhere">
+                <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
+                  {post.body}
+                </ReactMarkdown>
               </div>
             </GlassCard>
           </article>

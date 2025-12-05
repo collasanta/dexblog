@@ -66,28 +66,28 @@ export function DeployBlogCard() {
           </div>
           <div className="space-y-3">
             <div className="bg-muted rounded-lg p-3">
-              <p className="text-xs text-muted-foreground mb-1">Blog Address</p>
-              <div className="flex items-center justify-between gap-2">
-                <p className="font-mono text-sm break-all">{deploymentResult.blogAddress}</p>
+              <p className="text-xs text-muted-foreground mb-1 text-center">Blog Address</p>
+              <div className="flex items-center justify-center gap-2">
+                <p className="font-mono text-sm break-all text-center">{truncateAddress(deploymentResult.blogAddress, 8)}</p>
                 <a
                   href={`${getChainById(chainId)?.blockExplorers?.default.url}/address/${deploymentResult.blogAddress}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-primary hover:text-primary/80 transition-colors"
+                  className="text-primary hover:text-primary/80 transition-colors flex-shrink-0"
                 >
                   <ExternalLink className="h-4 w-4" />
                 </a>
               </div>
             </div>
             <div className="bg-muted rounded-lg p-3">
-              <p className="text-xs text-muted-foreground mb-1">Transaction Hash</p>
-              <div className="flex items-center justify-between gap-2">
-                <p className="font-mono text-sm break-all">{truncateAddress(deploymentResult.txHash, 8)}</p>
+              <p className="text-xs text-muted-foreground mb-1 text-center">Transaction Hash</p>
+              <div className="flex items-center justify-center gap-2">
+                <p className="font-mono text-sm break-all text-center">{truncateAddress(deploymentResult.txHash, 8)}</p>
                 <a
                   href={`${getChainById(chainId)?.blockExplorers?.default.url}/tx/${deploymentResult.txHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-primary hover:text-primary/80 transition-colors"
+                  className="text-primary hover:text-primary/80 transition-colors flex-shrink-0"
                 >
                   <ExternalLink className="h-4 w-4" />
                 </a>
@@ -132,7 +132,7 @@ export function DeployBlogCard() {
               <div className="group relative">
                 <Info className="h-4 w-4 text-muted-foreground cursor-help hover:text-primary transition-colors" />
                 <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 p-2 bg-muted border border-border rounded-lg text-xs text-foreground opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 shadow-lg">
-                  One-time payment to deploy your blog contract. Payable in USDC only.
+                 Or deploy for free by yourself, our protocol is open source and contract is available on github.
                 </div>
               </div>
             </div>

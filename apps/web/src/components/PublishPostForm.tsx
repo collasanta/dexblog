@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { useBlog } from "@/hooks/useBlog";
 import { Loader2, Eye, Edit3, Send } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import rehypeHighlight from "rehype-highlight";
 
 interface PublishPostFormProps {
   blogAddress: `0x${string}`;
@@ -27,9 +28,14 @@ export function PublishPostForm({ blogAddress }: PublishPostFormProps) {
 
     if (!title.trim() || !body.trim()) return;
 
-    const success = await publish(title, body);
-    if (success) {
-      router.push(`/blog/${blogAddress}`);
+    const result = await publish(title, body);
+    if (result.success) {
+      // Optionally redirect to the new post
+      if (result.postId !== undefined) {
+        router.push(`/blog/${blogAddress}/post/${result.postId}`);
+      } else {
+        router.push(`/blog/${blogAddress}`);
+      }
     }
   };
 
@@ -70,7 +76,9 @@ export function PublishPostForm({ blogAddress }: PublishPostFormProps) {
               <h1 className="text-2xl font-bold">{title || "Untitled"}</h1>
             </div>
             <div className="prose-dark prose prose-lg max-w-none min-h-[300px]">
-              <ReactMarkdown>{body || "*No content yet*"}</ReactMarkdown>
+              <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
+                {body || "*No content yet*"}
+              </ReactMarkdown>
             </div>
           </div>
         ) : (

@@ -1,11 +1,12 @@
-import { base, polygon, arbitrum, optimism, mainnet, bsc } from "wagmi/chains";
+import { base, polygon, arbitrum, arbitrumSepolia, optimism, mainnet, bsc } from "wagmi/chains";
 
 // Factory contract addresses per chain
 // Update these after deploying to each chain
 export const FACTORY_ADDRESSES: Record<number, `0x${string}`> = {
   [base.id]: "0x0000000000000000000000000000000000000000", // Deploy and update
   [polygon.id]: "0x0000000000000000000000000000000000000000",
-  [arbitrum.id]: "0xccb9EFF798D12D78d179c81aEC83c9E9F974013B", // ✅ Deployed on Arbitrum Mainnet (with CRUD support)
+  [arbitrum.id]: "0x832228e0609aa22eF506577AA71C973B96353b70", // ✅ Deployed on Arbitrum Mainnet (with blockNumber optimization)
+  [arbitrumSepolia.id]: "0xccb9EFF798D12D78d179c81aEC83c9E9F974013B", // ✅ Deployed on Arbitrum Sepolia (with ArbSys L2 blockNumber fix, no try-catch)
   [optimism.id]: "0x0000000000000000000000000000000000000000",
   [mainnet.id]: "0x0000000000000000000000000000000000000000",
   [bsc.id]: "0x0000000000000000000000000000000000000000",
@@ -16,6 +17,7 @@ export const USDC_ADDRESSES: Record<number, `0x${string}`> = {
   [base.id]: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
   [polygon.id]: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
   [arbitrum.id]: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+  [arbitrumSepolia.id]: "0x75faf114eafb1BDbe2F0316DF893fd58cE87D3E1", // Arbitrum Sepolia USDC
   [optimism.id]: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
   [mainnet.id]: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
   [bsc.id]: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", // USDC on BSC uses 18 decimals
@@ -30,6 +32,7 @@ export const USDC_DECIMALS: Record<number, number> = {
   [base.id]: 6,
   [polygon.id]: 6,
   [arbitrum.id]: 6,
+  [arbitrumSepolia.id]: 6,
   [optimism.id]: 6,
   [mainnet.id]: 6,
   [bsc.id]: 18, // BSC USDC uses 18 decimals

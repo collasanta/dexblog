@@ -86,3 +86,4 @@ Approximate deployment costs:
 - **Creating a blog**: ~600K gas (~$0.10 on Base)
 - **Publishing a post**: ~50K gas (~$0.01 on Base)
 
+

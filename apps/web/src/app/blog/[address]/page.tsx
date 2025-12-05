@@ -22,7 +22,13 @@ export default function BlogPage({ params }: BlogPageProps) {
   // Debug logging
   if (typeof window !== "undefined") {
     console.log("BlogPage - info:", info);
-    console.log("BlogPage - posts:", posts);
+    console.log("BlogPage - posts:", posts.map(p => ({
+      id: p.id,
+      title: p.title,
+      blockNumber: p.blockNumber || "N/A",
+      transactionHash: p.transactionHash || "(empty)",
+      timestamp: p.timestamp,
+    })));
     console.log("BlogPage - isLoadingPosts:", isLoadingPosts);
     console.log("BlogPage - postCount:", info?.postCount);
     console.log("BlogPage - posts.length:", posts.length);

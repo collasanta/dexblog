@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+/// @notice Arbitrum precompile interface for getting L2 block number
+/// @dev Address 0x0000000000000000000000000000000000000064 (100 in decimal)
+interface ArbSys {
+    /// @notice Get the current L2 block number (distinct from L1 block number)
+    /// @return The current L2 block number
+    function arbBlockNumber() external view returns (uint256);
+}
+
 /// @title Blog - Individual decentralized blog contract
 /// @notice Each user deploys their own Blog contract to publish posts on-chain
 /// @dev Posts are stored in contract storage for fast access, events for audit trail
@@ -12,7 +20,7 @@ contract Blog {
         string title;
         string body;
         uint256 timestamp;
-        bytes32 transactionHash; // Hash of the transaction that created/edited this post
+        uint256 blockNumber; // Block number when the post was published (used to fetch transaction hash from events)
         bool deleted; // Flag to mark deleted posts
     }
 
@@ -74,14 +82,27 @@ contract Blog {
         uint256 id = postCount;
         
         // Store post in contract storage
-        // Note: transactionHash will be captured by frontend/SDK from tx receipt
+        // blockNumber is used by SDK to efficiently fetch transaction hash from events
+        // On Arbitrum, use arbBlockNumber() to get the L2 block number (events are emitted on L2)
+        // On other chains, block.number works correctly
+        uint256 l2BlockNumber;
+        if (block.chainid == 42161 || block.chainid == 421614) {
+            // Arbitrum Mainnet or Arbitrum Sepolia - use ArbSys precompile
+            // Address 0x0000000000000000000000000000000000000064 (100 in decimal) is ArbSys precompile
+            ArbSys arbSys = ArbSys(address(0x0000000000000000000000000000000000000064));
+            l2BlockNumber = arbSys.arbBlockNumber();
+        } else {
+            // Other chains - use standard block.number
+            l2BlockNumber = block.number;
+        }
+        
         posts[id] = Post({
             id: id,
             author: msg.sender,
             title: title,
             body: body,
             timestamp: block.timestamp,
-            transactionHash: bytes32(0), // Will be filled by SDK from tx receipt
+            blockNumber: l2BlockNumber, // Store L2 block number for efficient event lookup
             deleted: false
         });
 
@@ -107,7 +128,7 @@ contract Blog {
         posts[id].title = newTitle;
         posts[id].body = newBody;
         posts[id].timestamp = block.timestamp; // Update timestamp on edit
-        // transactionHash will be updated by SDK from tx receipt
+        // Note: blockNumber is not updated on edit - it refers to the original creation block
 
         // Emit event for edit (could create PostEdited event if needed)
         emit PostCreated(id, msg.sender, newTitle, newBody, block.timestamp);

@@ -33,6 +33,11 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+    overflow-x: hidden;
+  }
+
+  html {
+    overflow-x: hidden;
   }
 }
 
@@ -105,29 +110,153 @@
 
 /* Markdown content styles */
 .prose-dark {
+  @apply prose prose-invert;
   @apply text-gray-200;
+  @apply max-w-none;
 }
 
 .prose-dark h1,
 .prose-dark h2,
 .prose-dark h3,
-.prose-dark h4 {
+.prose-dark h4,
+.prose-dark h5,
+.prose-dark h6 {
   @apply text-white font-semibold;
+  @apply mt-6 mb-4;
+}
+
+.prose-dark h1 {
+  @apply text-3xl;
+}
+
+.prose-dark h2 {
+  @apply text-2xl;
+}
+
+.prose-dark h3 {
+  @apply text-xl;
+}
+
+.prose-dark p {
+  @apply mb-4 leading-relaxed;
 }
 
 .prose-dark a {
-  @apply text-primary hover:text-primary-400;
+  @apply text-primary hover:text-primary/80 transition-colors;
+  @apply no-underline hover:underline;
 }
 
 .prose-dark code {
   @apply bg-muted px-1.5 py-0.5 rounded text-primary;
+  @apply text-sm font-mono;
 }
 
 .prose-dark pre {
   @apply bg-muted rounded-lg p-4 overflow-x-auto;
+  @apply border border-border;
+  @apply mb-4;
+}
+
+.prose-dark pre code {
+  @apply bg-transparent p-0 text-gray-200;
+  @apply text-sm;
 }
 
 .prose-dark blockquote {
   @apply border-l-4 border-primary pl-4 italic text-muted-foreground;
+  @apply my-4;
+}
+
+.prose-dark ul,
+.prose-dark ol {
+  @apply mb-4 pl-6;
+}
+
+.prose-dark li {
+  @apply mb-2;
+}
+
+.prose-dark ul {
+  @apply list-disc;
+}
+
+.prose-dark ol {
+  @apply list-decimal;
+}
+
+.prose-dark strong {
+  @apply font-semibold text-white;
+}
+
+.prose-dark em {
+  @apply italic;
+}
+
+.prose-dark hr {
+  @apply border-border my-8;
+}
+
+.prose-dark table {
+  @apply w-full border-collapse mb-4;
+}
+
+.prose-dark th,
+.prose-dark td {
+  @apply border border-border px-4 py-2;
+}
+
+.prose-dark th {
+  @apply bg-muted font-semibold text-white;
+}
+
+.prose-dark img {
+  @apply rounded-lg my-4;
+  @apply max-w-full;
+}
+
+/* Typewriter colored text */
+.typewriter-colored {
+  color: white;
+}
+
+.typewriter-colored::before {
+  content: "";
+}
+
+/* Apply colors to specific parts using CSS */
+.typewriter-colored {
+  background: linear-gradient(
+    to right,
+    white 0%,
+    white 30%,
+    hsl(165, 91%, 52%) 30%,
+    hsl(165, 91%, 52%) 50%,
+    white 50%,
+    white 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Syntax highlighting styles */
+.prose-dark pre code.hljs {
+  @apply bg-transparent;
+  @apply p-0;
+}
+
+.prose-dark code.hljs {
+  @apply bg-muted;
+  @apply px-1.5 py-0.5;
+  @apply rounded;
+}
+
+.prose-dark pre {
+  @apply bg-[#0d1117];
+  @apply border border-border;
+}
+
+.prose-dark pre code {
+  @apply text-gray-200;
 }
 

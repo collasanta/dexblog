@@ -152,6 +152,7 @@ export function useBlogFactory() {
           abi: FACTORY_ABI,
           functionName: "createBlogAsOwner",
           args: [name],
+          gas: 2000000n, // Increase gas limit for contract creation (test showed ~1.6M gas used)
         });
 
         console.log("Transaction hash:", hash);
@@ -264,6 +265,7 @@ export function useBlogFactory() {
         abi: FACTORY_ABI,
         functionName: "createBlog",
         args: [name],
+        gas: 2000000n, // Increase gas limit for contract creation (test showed ~1.6M gas used)
       });
 
       console.log("Transaction hash:", hash);

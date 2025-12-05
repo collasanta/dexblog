@@ -1,5 +1,9 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
+import * as dotenv from "dotenv";
+import { resolve } from "path";
+
+dotenv.config({ path: resolve(__dirname, ".env") });
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -34,7 +38,12 @@ const config: HardhatUserConfig = {
     },
     arbitrum: {
       url: process.env.ARBITRUM_RPC_URL || "https://arbitrum.drpc.org",
-      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      accounts: (process.env.PRIVATE_KEY || process.env.DEPLOYER) ? [(process.env.PRIVATE_KEY || process.env.DEPLOYER)!] : [],
+    },
+    arbitrumSepolia: {
+      url: process.env.ARBITRUM_SEPOLIA_RPC_URL || "https://sepolia-rollup.arbitrum.io/rpc",
+      accounts: (process.env.PRIVATE_KEY || process.env.DEPLOYER) ? [(process.env.PRIVATE_KEY || process.env.DEPLOYER)!] : [],
+      chainId: 421614,
     },
     optimism: {
       url: process.env.OPTIMISM_RPC_URL || "",

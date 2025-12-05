@@ -92,6 +92,7 @@ function ChainIcon({ chainId }: { chainId: number }) {
     1: "https://icons.llamao.fi/icons/chains/rsz_ethereum.jpg", // Ethereum
     137: "https://icons.llamao.fi/icons/chains/rsz_polygon.jpg", // Polygon
     42161: "https://icons.llamao.fi/icons/chains/rsz_arbitrum.jpg", // Arbitrum
+    421614: "https://icons.llamao.fi/icons/chains/rsz_arbitrum.jpg", // Arbitrum Sepolia
     10: "https://icons.llamao.fi/icons/chains/rsz_optimism.jpg", // Optimism
     8453: "https://icons.llamao.fi/icons/chains/rsz_base.jpg", // Base
     56: "https://icons.llamao.fi/icons/chains/rsz_bsc.jpg", // BSC
@@ -101,6 +102,7 @@ function ChainIcon({ chainId }: { chainId: number }) {
     1: "bg-[#627EEA]", // Ethereum
     137: "bg-[#8247E5]", // Polygon
     42161: "bg-[#28A0F0]", // Arbitrum
+    421614: "bg-[#28A0F0]", // Arbitrum Sepolia
     10: "bg-[#FF0420]", // Optimism
     8453: "bg-[#0052FF]", // Base
     56: "bg-[#F0B90B]", // BSC

@@ -1,7 +1,8 @@
 "use client";
 
 import { useReadContract, useWriteContract, useChainId, usePublicClient } from "wagmi";
-import { useQuery } from "@tanstack/react-query";
+import { decodeEventLog } from "viem";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BLOG_ABI } from "@/lib/contracts";
 import { useState } from "react";
 import { DexBlog } from "dex-blog-sdk";
@@ -13,6 +14,7 @@ export interface Post {
   title: string;
   body: string;
   timestamp: number;
+  blockNumber?: number;
   transactionHash: string;
   deleted: boolean;
 }
@@ -53,24 +55,23 @@ export function useBlog(address: `0x${string}` | undefined) {
   });
 
   const { writeContractAsync } = useWriteContract();
+  const queryClient = useQueryClient();
 
-  // Fetch posts from events using SDK
-  const { data: posts, isLoading: isLoadingPosts, refetch: refetchPosts } = useQuery({
-    queryKey: ["posts", address, chainId],
+  // Fetch posts from contract storage (FAST - no hashes, ~300ms)
+  const { data: postsWithoutHashes, isLoading: isLoadingPosts } = useQuery({
+    queryKey: ["posts-basic", address, chainId],
+    enabled: !!address && !!publicClient && !!chainId,
     queryFn: async (): Promise<Post[]> => {
       if (!address || !publicClient || !chainId) {
-        console.log("Missing address, publicClient, or chainId:", { address, publicClient: !!publicClient, chainId });
         return [];
       }
 
-      console.log("Fetching posts for blog using SDK:", address);
-
       try {
-        // Use DRPC URLs directly (same as wagmi config)
         const DRPC_URLS: Record<number, string> = {
           1: process.env.NEXT_PUBLIC_MAINNET_RPC_URL || "https://eth.drpc.org",
           137: process.env.NEXT_PUBLIC_POLYGON_RPC_URL || "https://polygon.drpc.org",
           42161: process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || "https://arbitrum.drpc.org",
+          421614: process.env.NEXT_PUBLIC_ARBITRUM_SEPOLIA_RPC_URL || "https://arbitrum-sepolia.drpc.org",
           10: process.env.NEXT_PUBLIC_OPTIMISM_RPC_URL || "https://optimism.drpc.org",
           8453: process.env.NEXT_PUBLIC_BASE_RPC_URL || "https://base.drpc.org",
           56: process.env.NEXT_PUBLIC_BSC_RPC_URL || "https://bsc.drpc.org",
@@ -78,58 +79,102 @@ export function useBlog(address: `0x${string}` | undefined) {
 
         const rpcUrl = DRPC_URLS[chainId];
         if (!rpcUrl) {
-          console.error("RPC URL not found for chain:", chainId);
           return [];
         }
 
-        console.log("Using SDK with RPC URL:", rpcUrl);
-
-        // Create ethers JsonRpcProvider
         const provider = new JsonRpcProvider(rpcUrl, chainId);
-
-        // Create SDK instance
         const blog = new DexBlog({
           address,
           chainId,
           provider,
         });
 
-        // Use SDK's getPosts method which reads from contract storage
-        const sdkPosts = await blog.getPosts();
+        // Fast: Get posts WITHOUT fetching hashes (~300ms)
+        const sdkPosts = await blog.getPostsWithoutHashes({});
         
-        console.log(`SDK found ${sdkPosts.length} posts`);
-        if (sdkPosts.length > 0) {
-          console.log("First post:", sdkPosts[0]);
-        }
-
-        // Convert SDK Post format to our Post format
-        const mappedPosts = sdkPosts.map((post) => ({
+        return sdkPosts.map((post: Post) => ({
           id: post.id,
           author: post.author,
           title: post.title,
           body: post.body,
           timestamp: post.timestamp,
-          transactionHash: post.transactionHash,
+          blockNumber: post.blockNumber,
+          transactionHash: "", // Will be filled by separate query
           deleted: post.deleted,
         }));
-        
-        console.log("Mapped posts:", mappedPosts);
-        return mappedPosts;
       } catch (error) {
-        console.error("Failed to fetch posts using SDK:", error);
-        if (error instanceof Error) {
-          console.error("Error message:", error.message);
-          console.error("Error stack:", error.stack);
-        }
+        console.error("Failed to fetch posts:", error);
         return [];
       }
     },
-    enabled: !!address && !!publicClient && !!chainId,
-    refetchInterval: 10000, // Refetch every 10 seconds to catch new posts
+    refetchInterval: 10000,
   });
 
-  const publish = async (title: string, body: string): Promise<boolean> => {
-    if (!address || !publicClient) return false;
+  // Fetch transaction hashes in background with batching (non-blocking, progressive)
+  const { data: transactionHashes } = useQuery({
+    queryKey: ["post-hashes", address, chainId, postsWithoutHashes?.map(p => `${p.id}-${p.blockNumber}`).join(",")],
+    enabled: !!address && !!publicClient && !!chainId && !!postsWithoutHashes && postsWithoutHashes.length > 0,
+    queryFn: async (): Promise<Map<number, string>> => {
+      if (!address || !publicClient || !chainId || !postsWithoutHashes) {
+        return new Map();
+      }
+
+      try {
+        const DRPC_URLS: Record<number, string> = {
+          1: process.env.NEXT_PUBLIC_MAINNET_RPC_URL || "https://eth.drpc.org",
+          137: process.env.NEXT_PUBLIC_POLYGON_RPC_URL || "https://polygon.drpc.org",
+          42161: process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || "https://arbitrum.drpc.org",
+          421614: process.env.NEXT_PUBLIC_ARBITRUM_SEPOLIA_RPC_URL || "https://arbitrum-sepolia.drpc.org",
+          10: process.env.NEXT_PUBLIC_OPTIMISM_RPC_URL || "https://optimism.drpc.org",
+          8453: process.env.NEXT_PUBLIC_BASE_RPC_URL || "https://base.drpc.org",
+          56: process.env.NEXT_PUBLIC_BSC_RPC_URL || "https://bsc.drpc.org",
+        };
+
+        const rpcUrl = DRPC_URLS[chainId];
+        if (!rpcUrl) {
+          return new Map();
+        }
+
+        const provider = new JsonRpcProvider(rpcUrl, chainId);
+        const blog = new DexBlog({
+          address,
+          chainId,
+          provider,
+        });
+
+        // Fast: Batch fetch hashes (3 concurrent, respects dRPC limits)
+        const postsWithBlockNumbers = postsWithoutHashes
+          .filter(p => p.blockNumber && p.blockNumber > 0)
+          .map(p => ({ postId: p.id, blockNumber: p.blockNumber! }));
+        
+        const hashMap = await blog.getPostHashesBatch(postsWithBlockNumbers);
+        
+        return hashMap;
+      } catch (error) {
+        console.error("Failed to fetch transaction hashes:", error);
+        return new Map();
+      }
+    },
+    refetchInterval: 30000, // Refetch hashes less frequently
+  });
+
+  // Merge posts with transaction hashes
+  const posts: Post[] = (postsWithoutHashes || []).map((post) => ({
+    ...post,
+    transactionHash: transactionHashes?.get(post.id) || post.transactionHash || "",
+  }));
+
+  const isLoadingHashes = !!postsWithoutHashes && postsWithoutHashes.length > 0 && !transactionHashes;
+
+  const refetchPostsAndHashes = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["posts-basic", address, chainId] }),
+      queryClient.invalidateQueries({ queryKey: ["post-hashes", address, chainId] }),
+    ]);
+  };
+
+  const publish = async (title: string, body: string): Promise<{ success: boolean; postId?: number }> => {
+    if (!address || !publicClient) return { success: false };
 
     setIsPublishing(true);
     try {
@@ -144,16 +189,34 @@ export function useBlog(address: `0x${string}` | undefined) {
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
       
       if (receipt.status === "success") {
+        // Extract postId from PostCreated event
+        let postId: number | undefined;
+        for (const log of receipt.logs) {
+          try {
+            const decoded = decodeEventLog({
+              abi: BLOG_ABI,
+              data: log.data,
+              topics: log.topics,
+            });
+            if (decoded.eventName === "PostCreated" && decoded.args.id !== undefined) {
+              postId = Number(decoded.args.id);
+              break;
+            }
+          } catch (e) {
+            // Not a PostCreated event, continue
+          }
+        }
+        
         // Refetch posts after transaction is confirmed
-        await refetchPosts();
-        return true;
+        await refetchPostsAndHashes();
+        return { success: true, postId };
       } else {
         console.error("Transaction failed");
-        return false;
+        return { success: false };
       }
     } catch (error) {
       console.error("Failed to publish:", error);
-      return false;
+      return { success: false };
     } finally {
       setIsPublishing(false);
     }
@@ -176,7 +239,7 @@ export function useBlog(address: `0x${string}` | undefined) {
       
       if (receipt.status === "success") {
         // Refetch posts after transaction is confirmed
-        await refetchPosts();
+        await refetchPostsAndHashes();
         return true;
       } else {
         console.error("Transaction failed");
@@ -207,7 +270,7 @@ export function useBlog(address: `0x${string}` | undefined) {
       
       if (receipt.status === "success") {
         // Refetch posts after transaction is confirmed
-        await refetchPosts();
+        await refetchPostsAndHashes();
         return true;
       } else {
         console.error("Transaction failed");
@@ -235,13 +298,14 @@ export function useBlog(address: `0x${string}` | undefined) {
     info,
     posts: posts || [],
     isLoadingPosts,
+    isLoadingHashes,
     publish,
     isPublishing,
     editPost,
     isEditing,
     deletePost,
     isDeleting,
-    refetchPosts,
+    refetchPosts: refetchPostsAndHashes,
   };
 }
 

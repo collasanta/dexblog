@@ -14,6 +14,8 @@ export interface Post {
   body: string;
   /** Unix timestamp when the post was published/edited */
   timestamp: number;
+  /** Block number when the post was published (used to fetch transaction hash) */
+  blockNumber?: number;
   /** Transaction hash of the publish/edit transaction (from receipt) */
   transactionHash: string;
   /** Whether this post has been deleted (soft delete) */
@@ -73,6 +75,16 @@ export interface CreateBlogResult {
 }
 
 /**
+ * Result of publishing a post
+ */
+export interface PublishPostResult {
+  /** Transaction receipt */
+  receipt: ethers.TransactionReceipt;
+  /** ID of the newly created post */
+  postId: number;
+}
+
+/**
  * Supported chains for DexBlog
  */
 export enum SupportedChain {
@@ -82,16 +94,5 @@ export enum SupportedChain {
   Optimism = 10,
   Base = 8453,
   BSC = 56,
-}
-
-/**
- * Chain configuration
- */
-export interface ChainConfig {
-  id: number;
-  name: string;
-  factoryAddress: string;
-  rpcUrl: string;
-  blockExplorer: string;
 }
 
