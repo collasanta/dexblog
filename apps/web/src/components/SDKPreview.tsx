@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
@@ -223,12 +223,23 @@ export function SDKPreview() {
 
         <div className="text-center mt-8">
           <a
-            href="https://npmjs.com/package/dex-blog-sdk"
+            href="https://www.npmjs.com/package/dex-blog-sdk"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-[#CB3837] text-white font-medium hover:bg-[#CB3837]/90 transition-colors"
           >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 18 7"
+              fill="currentColor"
+              xmlns="http://www.w3.org/2000/svg"
+              className="flex-shrink-0"
+            >
+              <path d="M0 0h18v7H9v1H5V7H0V0zm1 1v5h5V1H1zm13 0v5h3V1h-3zM6 1v5h2V1H6zm3 0v5h2V1H9z" fill="currentColor"/>
+            </svg>
             View on npm
+            <ExternalLink className="h-4 w-4" />
           </a>
         </div>
       </div>
