@@ -1,6 +1,6 @@
 {
   "name": "dex-blog-sdk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "SDK for interacting with DexBlog decentralized blogging contracts",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

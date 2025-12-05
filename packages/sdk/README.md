@@ -8,7 +8,8 @@ A TypeScript SDK for interacting with DexBlog decentralized blogging contracts o
 - 🏭 **Factory Support**: Create new blogs through the factory contract
 - ⚡ **Fast Loading**: Optimized post fetching with pagination support
 - 🔗 **Transaction Hashes**: Automatically fetch transaction hashes for all posts
-- 🌐 **Multi-Chain**: Support for Ethereum, Arbitrum, Base, Polygon, Optimism, and BSC
+- 🌐 **Multi-Chain**: Support for Arbitrum, Base, Optimism, BNB Chain, and more
+- 💰 **USDC Payments**: Factory uses USDC for blog creation fees
 - 📦 **TypeScript**: Full TypeScript support with type definitions
 
 ## Installation
@@ -111,10 +112,12 @@ if (isFree) {
   const result = await factory.createBlogAsOwner("My Blog Name");
   console.log("New blog address:", result.blogAddress);
 } else {
-  // Get setup fee
+  // Get setup fee (in USDC for most chains)
   const setupFee = await factory.getSetupFee();
   
-  // Create blog with payment
+  // Note: You need to approve USDC spending before creating the blog
+  // The factory contract uses USDC as payment token (not ETH)
+  // Create blog with USDC payment
   const result = await factory.createBlog("My Blog Name", setupFee);
   console.log("New blog address:", result.blogAddress);
 }
@@ -276,6 +279,27 @@ Get all blog addresses created by a specific owner.
 
 Get the total number of blogs created.
 
+##### `setSetupFee(fee: bigint): Promise<TransactionReceipt>`
+
+Set the setup fee for creating new blogs. Only callable by the factory owner.
+
+**Note:** The fee is in payment token units. For USDC (6 decimals), use `ethers.parseUnits("10", 6)` for 10 USDC.
+
+```typescript
+// Set fee to 0.1 USDC (6 decimals)
+const fee = ethers.parseUnits("0.1", 6);
+const receipt = await factory.setSetupFee(fee);
+```
+
+##### `withdraw(): Promise<TransactionReceipt>`
+
+Withdraw all collected payment token (USDC) fees to the factory owner. Only callable by the factory owner.
+
+```typescript
+const receipt = await factory.withdraw();
+console.log("Withdrawal transaction hash:", receipt.hash);
+```
+
 ### Helper Functions
 
 #### `getBlog(blogAddress, chainId, options?)`
@@ -334,12 +358,12 @@ if (isChainSupported(42161)) {
 | Chain | Chain ID | Status |
 |-------|----------|--------|
 | Arbitrum One | 42161 | ✅ Deployed |
-| Arbitrum Sepolia | 421614 | ✅ Deployed |
+| Arbitrum Sepolia | 421614 | ✅ Deployed (Free) |
+| Base | 8453 | ✅ Deployed |
+| Optimism | 10 | ✅ Deployed |
+| BNB Smart Chain | 56 | ✅ Deployed |
 | Ethereum Mainnet | 1 | ⏳ Coming soon |
-| Base | 8453 | ⏳ Coming soon |
 | Polygon | 137 | ⏳ Coming soon |
-| Optimism | 10 | ⏳ Coming soon |
-| BSC | 56 | ⏳ Coming soon |
 
 ## Examples
 
