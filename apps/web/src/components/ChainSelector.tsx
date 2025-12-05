@@ -38,14 +38,58 @@ export function ChainSelector({
   const { address } = useAccount();
   const [showEthereumDialog, setShowEthereumDialog] = useState(false);
   const [pendingChainId, setPendingChainId] = useState<number | null>(null);
+  const [selectOpen, setSelectOpen] = useState(false);
 
-  const chainId = selectedChainId ?? currentChainId;
+  // Default to Base (8453) if no selectedChainId and currentChainId is not set or not supported
+  const baseChainId = 8453;
+  const defaultChainId = selectedChainId ?? (currentChainId && supportedChains.some(chain => chain.id === currentChainId) ? currentChainId : baseChainId);
+  const chainId = defaultChainId;
+
+  // Prevent scroll locking when Select opens to avoid horizontal flicker
+  useEffect(() => {
+    const handleMutation = () => {
+      if (selectOpen && document.body.hasAttribute('data-scroll-locked')) {
+        document.body.removeAttribute('data-scroll-locked');
+        document.body.style.paddingRight = '';
+        document.body.style.overflow = '';
+        document.body.style.pointerEvents = '';
+      }
+    };
+
+    if (selectOpen) {
+      // Check immediately
+      handleMutation();
+      
+      // Watch for changes
+      const observer = new MutationObserver(handleMutation);
+      observer.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['data-scroll-locked', 'style'],
+      });
+
+      // Also check periodically
+      const interval = setInterval(handleMutation, 50);
+
+      return () => {
+        observer.disconnect();
+        clearInterval(interval);
+        // Clean up on unmount
+        document.body.removeAttribute('data-scroll-locked');
+        document.body.style.paddingRight = '';
+        document.body.style.overflow = '';
+        document.body.style.pointerEvents = '';
+      };
+    }
+  }, [selectOpen]);
   const usdcAddressRaw = getUSDCAddress(chainId);
   const publicClient = usePublicClient();
   
   // Ensure checksum address format
   const usdcAddress = usdcAddressRaw ? (getAddress(usdcAddressRaw) as `0x${string}`) : undefined;
 
+  // Skip USDC balance query on Arbitrum Sepolia (testnet with 0 factory fee)
+  const isArbitrumSepolia = chainId === 421614;
+  
   // Fetch USDC balance using publicClient directly (works better with proxy contracts)
   const { data: usdcBalance, isLoading: isLoadingBalance, error: balanceError } = useQuery({
     queryKey: ["usdc-balance", usdcAddress, address, chainId],
@@ -62,16 +106,15 @@ export function ChainSelector({
       });
       
       try {
-        // Encode the function call manually to debug
-        const { encodeFunctionData } = await import("viem");
-        const data = encodeFunctionData({
-          abi: ERC20_ABI,
-          functionName: "balanceOf",
-          args: [address as `0x${string}`],
-        });
-        console.log("[ChainSelector] Encoded function data:", data);
+        // First, check if contract exists by getting its bytecode
+        const code = await publicClient.getBytecode({ address: usdcAddress });
+        if (!code || code === "0x") {
+          console.warn("[ChainSelector] USDC contract does not exist at address:", usdcAddress);
+          console.warn("[ChainSelector] This might be a testnet issue. Returning 0n.");
+          return 0n;
+        }
         
-        // Try reading directly - proxy contracts should forward calls
+        // Try reading balance
         const balance = await publicClient.readContract({
           address: usdcAddress,
           abi: ERC20_ABI,
@@ -83,23 +126,16 @@ export function ChainSelector({
         console.log("[ChainSelector] Raw balance from contract:", balanceBigInt.toString());
         console.log("[ChainSelector] Balance in USDC (6 decimals):", (Number(balanceBigInt) / 1e6).toFixed(6));
         
-        // Verify it's not zero by checking if it's actually 0 or if there's an issue
-        if (balanceBigInt === 0n) {
-          console.warn("[ChainSelector] Balance is 0 - checking if this is correct...");
-          // Try a direct call to verify
-          try {
-            const directCall = await publicClient.call({
-              to: usdcAddress,
-              data,
-            });
-            console.log("[ChainSelector] Direct call result:", directCall);
-          } catch (directError) {
-            console.error("[ChainSelector] Direct call failed:", directError);
-          }
-        }
-        
         return balanceBigInt;
       } catch (error: any) {
+        // Check if it's a "no data" error (contract doesn't exist or doesn't have the function)
+        if (error?.shortMessage?.includes("returned no data") || 
+            error?.cause?.shortMessage?.includes("returned no data")) {
+          console.warn("[ChainSelector] USDC contract may not exist or may not have balanceOf function at:", usdcAddress);
+          console.warn("[ChainSelector] This is common on testnets. Returning 0n.");
+          return 0n;
+        }
+        
         console.error("[ChainSelector] Error reading USDC balance:", error);
         console.error("[ChainSelector] Error details:", {
           message: error?.message,
@@ -112,7 +148,7 @@ export function ChainSelector({
         return 0n;
       }
     },
-    enabled: !!publicClient && !!usdcAddress && !!address && chainId === currentChainId,
+    enabled: !!publicClient && !!usdcAddress && !!address && chainId === currentChainId && !isArbitrumSepolia,
     refetchInterval: 5000, // Refetch every 5 seconds
   });
 
@@ -182,11 +218,16 @@ export function ChainSelector({
 
   return (
     <>
-      <Select value={chainId?.toString()} onValueChange={handleChange}>
+      <Select 
+        value={chainId.toString()} 
+        onValueChange={handleChange}
+        onOpenChange={setSelectOpen}
+        modal={false}
+      >
         <SelectTrigger className="w-full">
           <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
             <SelectValue placeholder="Select chain" className="flex-1" />
-            {address && (
+            {address && !isArbitrumSepolia && (
               <span className="text-xs text-muted-foreground shrink-0">
                 {isLoadingBalance ? (
                   "• Loading..."

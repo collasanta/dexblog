@@ -30,13 +30,55 @@
     @apply border-border;
   }
 
+  html {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    scrollbar-gutter: stable; /* Reserve space for scrollbar to prevent layout shift */
+  }
+
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+    width: 100%;
+    max-width: 100%;
     overflow-x: hidden;
+    scrollbar-gutter: stable; /* Reserve space for scrollbar to prevent layout shift */
+    position: relative;
   }
 
-  html {
+  /* Prevent Radix UI from causing layout shift when Select opens */
+  /* This prevents the horizontal flicker by maintaining consistent width */
+  body[data-scroll-locked] {
+    padding-right: 0px !important;
+    overflow: visible !important;
+    position: static !important;
+  }
+  
+  /* Prevent scrollbar from causing layout shift */
+  body:not([data-scroll-locked]) {
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  
+  /* Ensure SelectContent doesn't cause horizontal overflow */
+  [data-radix-select-content] {
+    max-width: calc(100vw - 2rem);
+    overflow-x: hidden;
+  }
+  
+  /* Ensure main container takes full width */
+  main {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  
+  /* Prevent horizontal scroll on all containers */
+  #__next,
+  [data-nextjs-scroll-focus-boundary] {
+    width: 100%;
+    max-width: 100%;
     overflow-x: hidden;
   }
 }

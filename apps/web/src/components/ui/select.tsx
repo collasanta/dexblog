@@ -90,6 +90,12 @@ const SelectContent = React.forwardRef<
         className
       )}
       position={position}
+      sideOffset={4}
+      onCloseAutoFocus={(e) => e.preventDefault()}
+      onEscapeKeyDown={(e) => {
+        // Prevent body scroll lock
+        e.preventDefault();
+      }}
       {...props}
     >
       <SelectScrollUpButton />

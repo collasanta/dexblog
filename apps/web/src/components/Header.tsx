@@ -19,6 +19,12 @@ export function Header() {
 
         <nav className="hidden md:flex items-center gap-6">
           <Link
+            href="/"
+            className="text-sm text-muted-foreground hover:text-primary transition-colors"
+          >
+            Home
+          </Link>
+          <Link
             href="/dashboard"
             className="text-sm text-muted-foreground hover:text-primary transition-colors"
           >

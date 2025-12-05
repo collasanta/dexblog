@@ -27,7 +27,6 @@ export function DeployBlogCard() {
   const chainId = useChainId();
   const [blogName, setBlogName] = useState("");
   const [deploymentResult, setDeploymentResult] = useState<{ blogAddress: string; txHash: string } | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [showFactoryDialog, setShowFactoryDialog] = useState(false);
 
   const {
@@ -53,20 +52,16 @@ export function DeployBlogCard() {
       return;
     }
 
-    setError(null); // Clear previous errors
-
     try {
       // createBlog already handles approve automatically
       const result = await createBlog(blogName);
       if (result) {
         setDeploymentResult(result);
         setBlogName("");
-        setError(null);
       }
     } catch (error) {
+      // Log error to console only, don't show in UI
       console.error("Failed to create blog:", error);
-      const errorMessage = error instanceof Error ? error.message : "Failed to create blog. Please try again.";
-      setError(errorMessage);
     }
   };
 
@@ -199,12 +194,7 @@ export function DeployBlogCard() {
             </>
           )}
 
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-sm text-red-500">
-              <p className="font-semibold mb-2">⚠️ Error</p>
-              <p>{error}</p>
-            </div>
-          )}
+          {/* Errors are logged to console only, not shown in UI */}
         </div>
 
         <Button

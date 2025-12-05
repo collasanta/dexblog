@@ -70,6 +70,9 @@ export function useBlogFactory() {
     },
   });
 
+  // Skip USDC balance query on Arbitrum Sepolia (testnet with 0 factory fee)
+  const isArbitrumSepolia = chainId === 421614;
+  
   // Fetch USDC balance using publicClient directly (works better with proxy contracts)
   const { data: usdcBalance, error: usdcBalanceError } = useQuery({
     queryKey: ["usdc-balance-factory", usdcAddress, address, chainId],
@@ -77,6 +80,14 @@ export function useBlogFactory() {
       if (!publicClient || !usdcAddress || !address) return null;
       
       try {
+        // First, check if contract exists by getting its bytecode
+        const code = await publicClient.getBytecode({ address: usdcAddress });
+        if (!code || code === "0x") {
+          console.warn("[useBlogFactory] USDC contract does not exist at address:", usdcAddress);
+          console.warn("[useBlogFactory] This might be a testnet issue. Returning 0n.");
+          return 0n;
+        }
+        
         const balance = await publicClient.readContract({
           address: usdcAddress,
           abi: ERC20_ABI,
@@ -84,12 +95,21 @@ export function useBlogFactory() {
           args: [address as `0x${string}`],
         });
         return balance as bigint;
-      } catch (error) {
+      } catch (error: any) {
+        // Check if it's a "no data" error (contract doesn't exist or doesn't have the function)
+        if (error?.shortMessage?.includes("returned no data") || 
+            error?.cause?.shortMessage?.includes("returned no data")) {
+          console.warn("[useBlogFactory] USDC contract may not exist or may not have balanceOf function at:", usdcAddress);
+          console.warn("[useBlogFactory] This is common on testnets. Returning 0n.");
+          return 0n;
+        }
+        
         console.error("[useBlogFactory] Error reading USDC balance:", error);
-        throw error;
+        // Return 0n instead of throwing to prevent UI breakage
+        return 0n;
       }
     },
-    enabled: !!publicClient && !!usdcAddress && !!address,
+    enabled: !!publicClient && !!usdcAddress && !!address && !isArbitrumSepolia,
     refetchInterval: 5000, // Refetch every 5 seconds
   });
 
@@ -245,7 +265,62 @@ export function useBlogFactory() {
 
     const fee = setupFee || parseUnits("10", USDC_DECIMALS[chainId] || 6);
     
-    // Check USDC balance first
+    // If fee is 0, skip balance check and approval
+    if (fee === 0n) {
+      // Skip approval and balance checks when fee is 0
+      try {
+        setIsCreating(true);
+        const hash = await writeContractAsync({
+          address: factoryAddress,
+          abi: FACTORY_ABI,
+          functionName: "createBlog",
+          args: [name],
+          gas: 2000000n,
+        });
+
+        console.log("Transaction hash:", hash);
+        
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        
+        if (receipt.status !== "success") {
+          throw new Error("Transaction failed");
+        }
+
+        const blogCreatedEvent = receipt.logs.find((log) => {
+          try {
+            const decoded = decodeEventLog({
+              abi: FACTORY_ABI,
+              data: log.data,
+              topics: log.topics,
+            });
+            return decoded.eventName === "BlogCreated";
+          } catch {
+            return false;
+          }
+        });
+
+        if (blogCreatedEvent) {
+          const decoded = decodeEventLog({
+            abi: FACTORY_ABI,
+            data: blogCreatedEvent.data,
+            topics: blogCreatedEvent.topics,
+          });
+          const blogAddress = (decoded.args as any).blogAddress;
+          console.log("Blog created at address:", blogAddress);
+          return { blogAddress: blogAddress as string, txHash: hash };
+        }
+
+        console.warn("Could not find BlogCreated event in receipt");
+        return null;
+      } catch (error) {
+        console.error("Failed to create blog:", error);
+        throw error;
+      } finally {
+        setIsCreating(false);
+      }
+    }
+    
+    // Check USDC balance first (only if fee > 0)
     const balance = await publicClient.readContract({
       address: usdcAddress,
       abi: ERC20_ABI,
@@ -266,8 +341,8 @@ export function useBlogFactory() {
         args: [address, factoryAddress],
       });
 
-      // Step 2: Approve if needed
-      if (!currentAllowance || currentAllowance < fee) {
+      // Step 2: Approve if needed (only if fee > 0)
+      if (fee > 0n && (!currentAllowance || currentAllowance < fee)) {
         setIsApproving(true);
         try {
           const approveHash = await writeContractAsync({
@@ -367,8 +442,8 @@ export function useBlogFactory() {
     estimatedGasCost,
     isEstimatingGas,
     hasEnoughNativeBalance,
-    needsApproval: allowance && setupFee ? allowance < setupFee : false,
-    hasEnoughBalance: usdcBalance && setupFee ? usdcBalance >= setupFee : false,
+    needsApproval: setupFee && setupFee > 0n && allowance ? allowance < setupFee : false,
+    hasEnoughBalance: setupFee && setupFee > 0n && usdcBalance ? usdcBalance >= setupFee : true, // true when fee is 0
     isFactoryOwner: isFactoryOwner || false,
     isLoadingFee,
     isLoadingTotal,

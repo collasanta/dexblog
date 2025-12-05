@@ -27,9 +27,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark" style={{ width: '100%', maxWidth: '100%', overflowX: 'hidden' }}>
       <body
         className={`${spaceGrotesk.variable} ${jetbrainsMono.variable} font-sans antialiased min-h-screen bg-background`}
+        style={{ width: '100%', maxWidth: '100%', overflowX: 'hidden' }}
       >
         <Providers>{children}</Providers>
       </body>
