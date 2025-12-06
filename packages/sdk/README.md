@@ -131,6 +131,66 @@ if (isFree) {
 }
 ```
 
+### Provider Helpers & RPC Fallback
+
+The SDK can normalize any EIP-1193 provider (wagmi wallet client, window.ethereum, WalletConnect, etc.) and automatically rotate RPC endpoints (official + Chainlist).
+
+#### Read-only with fallback RPCs
+
+```typescript
+import { createFallbackProvider, DexBlogFactory, getFactoryAddress } from "dex-blog-sdk";
+
+const chainId = 8453; // Base
+const { provider } = await createFallbackProvider(chainId);
+
+const factory = new DexBlogFactory({
+  address: getFactoryAddress(chainId)!,
+  chainId,
+  provider,
+});
+
+const setupFee = await factory.getSetupFee();
+```
+
+#### Wagmi wallet client → SDK signer
+
+```typescript
+import { walletClientToEthers, createFallbackProvider, DexBlogFactory, getFactoryAddress } from "dex-blog-sdk";
+
+// walletClient comes from wagmi's useWalletClient()
+const { signer, chainId } = await walletClientToEthers(walletClient);
+const { provider } = await createFallbackProvider(chainId);
+
+const factory = new DexBlogFactory({
+  address: getFactoryAddress(chainId)!,
+  chainId,
+  provider,
+  signer,
+});
+
+const blogs = await factory.getBlogsByOwner(await signer.getAddress());
+```
+
+#### window.ethereum / WalletConnect / MetaMask SDK
+
+```typescript
+import { eip1193ProviderToSigner, DexBlog } from "dex-blog-sdk";
+
+const chainId = 42161; // Arbitrum
+const { provider, signer } = await eip1193ProviderToSigner(window.ethereum, { chainId });
+
+const blog = new DexBlog({
+  address: "0xBlog...",
+  chainId,
+  provider,
+  signer,
+});
+
+await blog.publish("Hello DexBlog", "gm");
+```
+
+All helpers accept any EIP-1193-compatible provider. No environment variables are required for RPC configuration—the SDK handles fallback and rotation internally.
+
 ## API Reference
 
 ### `DexBlog`

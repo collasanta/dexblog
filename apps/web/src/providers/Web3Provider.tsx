@@ -16,7 +16,15 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
             gcTime: 10 * 60 * 1000, // 10 minutes cache (garbage collection)
             retry: 2, // Retry failed requests twice
             retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
+            onError: (error: any) => {
+              console.error("[React Query] Query error:", error);
+            },
           },
+        },
+        logger: {
+          log: (...args) => console.log("[React Query]", ...args),
+          warn: (...args) => console.warn("[React Query]", ...args),
+          error: (...args) => console.error("[React Query]", ...args),
         },
       })
   );

@@ -1,12 +1,11 @@
 "use client";
 
-import { useReadContract, useWriteContract, useChainId, usePublicClient } from "wagmi";
-import { decodeEventLog } from "viem";
+import { useChainId } from "wagmi";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BLOG_ABI } from "@/lib/contracts";
-import { useState } from "react";
-import { DexBlog, getRpcUrlWithFallback } from "dex-blog-sdk";
-import { JsonRpcProvider } from "ethers";
+import { useMemo, useState } from "react";
+import { DexBlog } from "dex-blog-sdk";
+import { useSdkProvider } from "./useSdkProvider";
+import { useSdkSigner } from "./useSdkSigner";
 
 export interface Post {
   id: number;
@@ -28,54 +27,59 @@ export interface BlogInfo {
 
 export function useBlog(address: `0x${string}` | undefined) {
   const chainId = useChainId();
-  const publicClient = usePublicClient();
   const [isPublishing, setIsPublishing] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-
-  const { data: owner } = useReadContract({
-    address,
-    abi: BLOG_ABI,
-    functionName: "owner",
-    query: { enabled: !!address },
-  });
-
-  const { data: name } = useReadContract({
-    address,
-    abi: BLOG_ABI,
-    functionName: "name",
-    query: { enabled: !!address },
-  });
-
-  const { data: postCount } = useReadContract({
-    address,
-    abi: BLOG_ABI,
-    functionName: "postCount",
-    query: { enabled: !!address },
-  });
-
-  const { writeContractAsync } = useWriteContract();
   const queryClient = useQueryClient();
+  const { provider: sdkProvider } = useSdkProvider(chainId);
+  const { signer, chainId: signerChainId } = useSdkSigner();
+  const canUseSigner = signer && signerChainId === chainId;
+
+  const readBlog = useMemo(() => {
+    if (!address || !chainId || !sdkProvider) {
+      return null;
+    }
+    return new DexBlog({
+      address,
+      chainId,
+      provider: sdkProvider,
+    });
+  }, [address, chainId, sdkProvider]);
+
+  const getWriteBlog = () => {
+    if (!readBlog || !sdkProvider || !canUseSigner || !signer) {
+      return null;
+    }
+    return new DexBlog({
+      address,
+      chainId,
+      provider: sdkProvider,
+      signer,
+    });
+  };
+
+  const { data: info } = useQuery({
+    queryKey: ["blog-info", address, chainId],
+    enabled: !!readBlog,
+    queryFn: async (): Promise<BlogInfo | undefined> => {
+      if (!readBlog) return undefined;
+      return readBlog.getInfo();
+    },
+    staleTime: 60 * 1000,
+  });
 
   // Fetch posts from contract storage (FAST - no hashes, ~300ms)
   const { data: postsWithoutHashes, isLoading: isLoadingPosts } = useQuery({
     queryKey: ["posts-basic", address, chainId],
-    enabled: !!address && !!publicClient && !!chainId,
+    enabled: !!readBlog,
     queryFn: async (): Promise<Post[]> => {
-      if (!address || !publicClient || !chainId) {
+      if (!readBlog) {
         return [];
       }
 
       try {
-        const { provider } = await getRpcUrlWithFallback(chainId, { timeoutMs: 8000 });
-        const blog = new DexBlog({
-          address,
-          chainId,
-          provider,
-        });
-
         // Fast: Get posts WITHOUT fetching hashes (~300ms)
-        const sdkPosts = await blog.getPostsWithoutHashes({});
+        const sdkPosts = await readBlog.getPostsWithoutHashes({});
         
         return sdkPosts.map((post: Post) => ({
           id: post.id,
@@ -99,26 +103,19 @@ export function useBlog(address: `0x${string}` | undefined) {
   // Fetch transaction hashes in background with batching (non-blocking, progressive)
   const { data: transactionHashes } = useQuery({
     queryKey: ["post-hashes", address, chainId, postsWithoutHashes?.map(p => `${p.id}-${p.blockNumber}`).join(",")],
-    enabled: !!address && !!publicClient && !!chainId && !!postsWithoutHashes && postsWithoutHashes.length > 0,
+    enabled: !!readBlog && !!postsWithoutHashes && postsWithoutHashes.length > 0,
     queryFn: async (): Promise<Map<number, string>> => {
-      if (!address || !publicClient || !chainId || !postsWithoutHashes) {
+      if (!readBlog || !postsWithoutHashes) {
         return new Map();
       }
 
       try {
-        const { provider } = await getRpcUrlWithFallback(chainId, { timeoutMs: 8000 });
-        const blog = new DexBlog({
-          address,
-          chainId,
-          provider,
-        });
-
         // Fast: Batch fetch hashes (3 concurrent, respects dRPC limits)
         const postsWithBlockNumbers = postsWithoutHashes
           .filter(p => p.blockNumber && p.blockNumber > 0)
           .map(p => ({ postId: p.id, blockNumber: p.blockNumber! }));
         
-        const hashMap = await blog.getPostHashesBatch(postsWithBlockNumbers);
+        const hashMap = await readBlog.getPostHashesBatch(postsWithBlockNumbers);
         
         return hashMap;
       } catch (error) {
@@ -146,46 +143,17 @@ export function useBlog(address: `0x${string}` | undefined) {
   };
 
   const publish = async (title: string, body: string): Promise<{ success: boolean; postId?: number }> => {
-    if (!address || !publicClient) return { success: false };
+    const blogWithSigner = getWriteBlog();
+    if (!blogWithSigner) {
+      console.error("Signer not available for publish");
+      return { success: false };
+    }
 
     setIsPublishing(true);
     try {
-      const hash = await writeContractAsync({
-        address,
-        abi: BLOG_ABI,
-        functionName: "publish",
-        args: [title, body],
-      });
-
-      // Wait for transaction confirmation
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      
-      if (receipt.status === "success") {
-        // Extract postId from PostCreated event
-        let postId: number | undefined;
-        for (const log of receipt.logs) {
-          try {
-            const decoded = decodeEventLog({
-              abi: BLOG_ABI,
-              data: log.data,
-              topics: log.topics,
-            });
-            if (decoded.eventName === "PostCreated" && decoded.args.id !== undefined) {
-              postId = Number(decoded.args.id);
-              break;
-            }
-          } catch (e) {
-            // Not a PostCreated event, continue
-          }
-        }
-        
-        // Refetch posts after transaction is confirmed
-        await refetchPostsAndHashes();
-        return { success: true, postId };
-      } else {
-        console.error("Transaction failed");
-        return { success: false };
-      }
+      const result = await blogWithSigner.publish(title, body);
+      await refetchPostsAndHashes();
+      return { success: true, postId: result.postId };
     } catch (error) {
       console.error("Failed to publish:", error);
       return { success: false };
@@ -195,28 +163,17 @@ export function useBlog(address: `0x${string}` | undefined) {
   };
 
   const editPost = async (id: number, newTitle: string, newBody: string): Promise<boolean> => {
-    if (!address || !publicClient) return false;
+    const blogWithSigner = getWriteBlog();
+    if (!blogWithSigner) {
+      console.error("Signer not available for edit");
+      return false;
+    }
 
     setIsEditing(true);
     try {
-      const hash = await writeContractAsync({
-        address,
-        abi: BLOG_ABI as any,
-        functionName: "editPost",
-        args: [BigInt(id), newTitle, newBody],
-      });
-
-      // Wait for transaction confirmation
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      
-      if (receipt.status === "success") {
-        // Refetch posts after transaction is confirmed
-        await refetchPostsAndHashes();
-        return true;
-      } else {
-        console.error("Transaction failed");
-        return false;
-      }
+      await blogWithSigner.editPost(id, newTitle, newBody);
+      await refetchPostsAndHashes();
+      return true;
     } catch (error) {
       console.error("Failed to edit post:", error);
       return false;
@@ -226,28 +183,17 @@ export function useBlog(address: `0x${string}` | undefined) {
   };
 
   const deletePost = async (id: number): Promise<boolean> => {
-    if (!address || !publicClient) return false;
+    const blogWithSigner = getWriteBlog();
+    if (!blogWithSigner) {
+      console.error("Signer not available for delete");
+      return false;
+    }
 
     setIsDeleting(true);
     try {
-      const hash = await writeContractAsync({
-        address,
-        abi: BLOG_ABI as any,
-        functionName: "deletePost",
-        args: [BigInt(id)],
-      });
-
-      // Wait for transaction confirmation
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      
-      if (receipt.status === "success") {
-        // Refetch posts after transaction is confirmed
-        await refetchPostsAndHashes();
-        return true;
-      } else {
-        console.error("Transaction failed");
-        return false;
-      }
+      await blogWithSigner.deletePost(id);
+      await refetchPostsAndHashes();
+      return true;
     } catch (error) {
       console.error("Failed to delete post:", error);
       return false;
@@ -255,16 +201,6 @@ export function useBlog(address: `0x${string}` | undefined) {
       setIsDeleting(false);
     }
   };
-
-  const info: BlogInfo | undefined =
-    address && owner && name && postCount !== undefined
-      ? {
-          address,
-          owner: owner as string,
-          name: name as string,
-          postCount: Number(postCount),
-        }
-      : undefined;
 
   return {
     info,

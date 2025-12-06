@@ -12,7 +12,7 @@ function isRetriableStatus(status: number) {
 function fallbackTransport(chainId: number) {
   return () => ({
     async request({ method, params }) {
-      const candidates = await getRpcUrlList(chainId);
+      const candidates = getRpcUrlList(chainId);
       if (!candidates.length) {
         throw new Error(`No RPC candidates for chain ${chainId}`);
       }

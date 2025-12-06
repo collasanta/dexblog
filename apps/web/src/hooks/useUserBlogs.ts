@@ -1,8 +1,11 @@
 "use client";
 
-import { useAccount, useChainId, useReadContract, usePublicClient } from "wagmi";
-import { getFactoryAddress, FACTORY_ABI, BLOG_ABI } from "@/lib/contracts";
+import { useMemo } from "react";
+import { useAccount, useChainId } from "wagmi";
 import { useQuery } from "@tanstack/react-query";
+import { getFactoryAddress } from "@/lib/contracts";
+import { DexBlogFactory, DexBlog } from "dex-blog-sdk";
+import { useSdkProvider } from "./useSdkProvider";
 
 export interface UserBlog {
   address: string;
@@ -10,72 +13,106 @@ export interface UserBlog {
   postCount: number;
 }
 
-// Helper to add delay between requests
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function useUserBlogs() {
-  const { address: userAddress, isConnected } = useAccount();
+  const { address: userAddress } = useAccount();
   const chainId = useChainId();
+  const { provider: sdkProvider } = useSdkProvider(chainId);
   const factoryAddress = getFactoryAddress(chainId);
-  const publicClient = usePublicClient();
 
-  const { data: blogAddresses, isLoading: isLoadingAddresses } = useReadContract({
-    address: factoryAddress || undefined,
-    abi: FACTORY_ABI,
-    functionName: "getBlogsByOwner",
-    args: userAddress ? [userAddress] : undefined,
-    query: {
-      enabled: !!factoryAddress && !!userAddress,
+  const factory = useMemo(() => {
+    if (!sdkProvider || !factoryAddress) return null;
+    return new DexBlogFactory({
+      address: factoryAddress as `0x${string}`,
+      chainId,
+      provider: sdkProvider,
+    });
+  }, [sdkProvider, factoryAddress, chainId]);
+
+  const { data: blogAddresses, isLoading: isLoadingAddresses, error: addressesError } = useQuery({
+    queryKey: ["userBlogs-addresses", userAddress, chainId],
+    queryFn: async (): Promise<string[]> => {
+      if (!factory || !userAddress) return [];
+      try {
+        console.log(`[useUserBlogs] Fetching blogs for ${userAddress} on chain ${chainId}`);
+        // SDK's ResilientProvider handles retries automatically
+        const addresses = await factory.getBlogsByOwner(userAddress);
+        console.log(`[useUserBlogs] Found ${addresses.length} blogs`);
+        return addresses;
+      } catch (error: any) {
+        console.error(`[useUserBlogs] Failed to fetch blog addresses:`, error);
+        throw error;
+      }
     },
+    enabled: !!factory && !!userAddress,
+    staleTime: 60 * 1000,
+    retry: 2,
+    retryDelay: 1000,
   });
 
-  // Fetch blog details for each address sequentially to avoid rate limits
+  // Log errors
+  if (addressesError) {
+    console.error("[useUserBlogs] Error fetching blog addresses:", addressesError);
+  }
+
   const { data: blogs, isLoading: isLoadingBlogs } = useQuery({
-    queryKey: ["userBlogs", userAddress, chainId, blogAddresses],
+    queryKey: ["userBlogs", userAddress, chainId, blogAddresses?.join(",")],
     queryFn: async (): Promise<UserBlog[]> => {
-      if (!blogAddresses || !chainId || !publicClient) return [];
+      if (!blogAddresses || !sdkProvider) return [];
 
-      const blogDetails: UserBlog[] = [];
-      
-      // Fetch blogs sequentially with delay to avoid rate limits
-      for (const addr of blogAddresses as string[]) {
+      const results: UserBlog[] = [];
+      for (const addr of blogAddresses) {
         try {
-          const [name, postCount] = await Promise.all([
-            publicClient.readContract({
-              address: addr as `0x${string}`,
-              abi: BLOG_ABI,
-              functionName: "name",
-            }),
-            publicClient.readContract({
-              address: addr as `0x${string}`,
-              abi: BLOG_ABI,
-              functionName: "postCount",
-            }),
-          ]);
-
-          blogDetails.push({
-            address: addr,
-            name: name as string,
-            postCount: Number(postCount),
+          const blog = new DexBlog({
+            address: addr as `0x${string}`,
+            chainId,
+            provider: sdkProvider,
           });
-        } catch (error) {
-          console.error(`Failed to fetch blog ${addr}:`, error);
+          
+          // SDK's ResilientProvider handles retries automatically
+          const info = await blog.getInfo();
+          results.push({
+            address: info.address,
+            name: info.name,
+            postCount: info.postCount,
+          });
+        } catch (error: any) {
+          // Check if it's a "contract doesn't exist" error (non-retryable)
+          const isContractMissing =
+            error?.message?.includes("missing revert data") ||
+            error?.message?.includes("call revert exception") ||
+            error?.code === "CALL_EXCEPTION";
+
+          const isBadDataEmpty =
+            error?.code === "BAD_DATA" &&
+            (error?.message?.includes('value="0x"') ||
+              error?.message?.includes("value=0x") ||
+              error?.info?.value === "0x" ||
+              error?.info?.value === "0x0");
+
+          if (isContractMissing || isBadDataEmpty) {
+            // Not a valid blog contract at this address - skip silently
+            continue;
+          }
+
+          // Log other errors but don't fail the whole query
+          console.warn(`Failed to fetch blog ${addr}:`, error?.message || error);
         }
-        
-        // Add delay between blogs to avoid rate limiting
-        await delay(150);
+        // Small delay between blogs to be nice to RPCs
+        await delay(100);
       }
 
-      return blogDetails;
+      return results;
     },
-    enabled: !!blogAddresses && (blogAddresses as string[]).length > 0 && !!publicClient,
-    staleTime: 5 * 60 * 1000, // 5 minutes - blog metadata rarely changes
+    enabled: !!sdkProvider && !!blogAddresses && blogAddresses.length > 0,
+    staleTime: 5 * 60 * 1000,
   });
 
   return {
     blogs: blogs || [],
     isLoading: isLoadingAddresses || isLoadingBlogs,
-    blogCount: blogAddresses ? (blogAddresses as string[]).length : 0,
+    blogCount: blogAddresses ? blogAddresses.length : 0,
   };
 }
 

@@ -4,6 +4,7 @@ export * from "./types";
 export * from "./chains";
 export * from "./helpers";
 export * from "./rpc";
+export * from "./adapters";
 
 // Re-export ABIs for advanced usage
 export { default as BlogAbi } from "./abis/Blog.json";

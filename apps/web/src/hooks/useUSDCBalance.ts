@@ -1,9 +1,11 @@
 "use client";
 
-import { useAccount, useChainId, usePublicClient } from "wagmi";
+import { useAccount, useChainId } from "wagmi";
 import { getUSDCAddress, ERC20_ABI, USDC_DECIMALS } from "@/lib/contracts";
 import { getAddress } from "viem";
 import { useQuery } from "@tanstack/react-query";
+import { ethers } from "ethers";
+import { useSdkProvider } from "./useSdkProvider";
 
 /**
  * Shared hook for fetching USDC balance
@@ -12,7 +14,7 @@ import { useQuery } from "@tanstack/react-query";
 export function useUSDCBalance() {
   const { address } = useAccount();
   const chainId = useChainId();
-  const publicClient = usePublicClient();
+  const { provider: sdkProvider } = useSdkProvider(chainId);
   const usdcAddressRaw = getUSDCAddress(chainId);
   
   // Ensure checksum address format
@@ -21,48 +23,31 @@ export function useUSDCBalance() {
   // Skip USDC balance query on Arbitrum Sepolia (testnet with 0 factory fee)
   const isArbitrumSepolia = chainId === 421614;
   
-  // Fetch USDC balance using publicClient directly (works better with proxy contracts)
   const { data: usdcBalance, isLoading, error } = useQuery({
     queryKey: ["usdc-balance", usdcAddress, address, chainId],
     queryFn: async () => {
-      if (!publicClient || !usdcAddress || !address) {
+      if (!sdkProvider || !usdcAddress || !address) {
         return null;
       }
       
       try {
-        // First, check if contract exists by getting its bytecode
-        const code = await publicClient.getBytecode({ address: usdcAddress });
+        const code = await sdkProvider.getCode(usdcAddress);
         if (!code || code === "0x") {
           console.warn("[useUSDCBalance] USDC contract does not exist at address:", usdcAddress);
           return 0n;
         }
         
-        // Try reading balance
-        const balance = await publicClient.readContract({
-          address: usdcAddress,
-          abi: ERC20_ABI,
-          functionName: "balanceOf",
-          args: [address as `0x${string}`],
-        });
-        
-        const balanceBigInt = typeof balance === 'bigint' ? balance : BigInt(balance.toString());
-        return balanceBigInt;
-      } catch (error: any) {
-        // Check if it's a "no data" error (contract doesn't exist or doesn't have the function)
-        if (error?.shortMessage?.includes("returned no data") || 
-            error?.cause?.shortMessage?.includes("returned no data")) {
-          console.warn("[useUSDCBalance] USDC contract may not exist or may not have balanceOf function");
-          return 0n;
-        }
-        
-        console.error("[useUSDCBalance] Error reading USDC balance:", error);
-        // Don't throw - return 0n instead so UI doesn't break
+        const contract = new ethers.Contract(usdcAddress, ERC20_ABI, sdkProvider);
+        const balance = await contract.balanceOf(address);
+        return typeof balance === "bigint" ? balance : BigInt(balance.toString());
+      } catch (err) {
+        console.error("[useUSDCBalance] Error reading USDC balance:", err);
         return 0n;
       }
     },
-    enabled: !!publicClient && !!usdcAddress && !!address && !isArbitrumSepolia,
-    staleTime: 30 * 1000, // 30 seconds - balance is important but doesn't change that often
-    refetchInterval: false, // No polling - invalidate on user actions instead
+    enabled: !!sdkProvider && !!usdcAddress && !!address && !isArbitrumSepolia,
+    staleTime: 30 * 1000,
+    refetchInterval: false,
   });
 
   return {

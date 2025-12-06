@@ -1,6 +1,7 @@
 import { ethers } from "ethers";
 import BlogFactoryAbi from "./abis/BlogFactory.json";
 import { DexBlogFactoryConfig, CreateBlogResult } from "./types";
+import { getRpcUrlList } from "./rpc";
 
 /**
  * SDK for interacting with the DexBlog Factory contract
@@ -31,24 +32,35 @@ import { DexBlogFactoryConfig, CreateBlogResult } from "./types";
  * ```
  */
 export class DexBlogFactory {
-  private contract: ethers.Contract;
+  private contract: any;
   public readonly address: string;
   public readonly chainId: number;
+  private signer?: ethers.Signer;
+  private provider: ethers.Provider;
 
   constructor(config: DexBlogFactoryConfig) {
     this.address = config.address;
     this.chainId = config.chainId;
 
-    const providerOrSigner = config.signer || config.provider;
-    if (!providerOrSigner) {
+    const provider = config.provider || config.signer?.provider;
+    if (!provider) {
       throw new Error("Provider or signer required");
     }
 
+    this.provider = provider;
+    this.signer = config.signer;
     this.contract = new ethers.Contract(
       config.address,
       BlogFactoryAbi.abi,
-      providerOrSigner
+      provider
     );
+  }
+
+  private getWriteContract(): ethers.Contract {
+    if (!this.signer) {
+      throw new Error("Signer required for write operations");
+    }
+    return this.contract.connect(this.signer);
   }
 
   /**
@@ -77,7 +89,8 @@ export class DexBlogFactory {
    * ```
    */
   async createBlog(name: string, overrides?: ethers.Overrides): Promise<CreateBlogResult> {
-    const tx = await this.contract.createBlog(name, overrides ?? {});
+    const writeContract = this.getWriteContract();
+    const tx = await writeContract.createBlog(name, overrides ?? {});
     const receipt = await tx.wait();
 
     // Find BlogCreated event in logs
@@ -115,7 +128,8 @@ export class DexBlogFactory {
    * @returns Object containing the new blog address and transaction receipt
    */
   async createBlogAsOwner(name: string, overrides?: ethers.Overrides): Promise<CreateBlogResult> {
-    const tx = await this.contract.createBlogAsOwner(name, overrides ?? {});
+    const writeContract = this.getWriteContract();
+    const tx = await writeContract.createBlogAsOwner(name, overrides ?? {});
     const receipt = await tx.wait();
 
     // Find BlogCreated event in logs
@@ -169,7 +183,72 @@ export class DexBlogFactory {
    * @returns Array of blog contract addresses
    */
   async getBlogsByOwner(owner: string): Promise<string[]> {
-    return this.contract.getBlogsByOwner(owner);
+    const isEmptyBadData = (error: any) => {
+      const msg = error?.message?.toLowerCase() || "";
+      const code = error?.code;
+      const infoVal = error?.info?.value;
+      return (
+        code === "BAD_DATA" &&
+        (msg.includes('value="0x"') ||
+          msg.includes('value="0x0"') ||
+          msg.includes("value=0x") ||
+          msg.includes("value=0x0") ||
+          infoVal === "0x" ||
+          infoVal === "0x0")
+      );
+    };
+
+    // First attempt with the current provider (likely ResilientProvider)
+    try {
+      return await this.contract.getBlogsByOwner(owner);
+    } catch (error: any) {
+      if (!isEmptyBadData(error)) {
+        if (typeof window !== "undefined") {
+          console.log("[DexBlogFactory] getBlogsByOwner error (non-retryable):", {
+            message: error?.message,
+            code: error?.code,
+            info: error?.info,
+            error,
+          });
+        }
+        throw error;
+      }
+      if (typeof window !== "undefined") {
+        console.warn("[DexBlogFactory] Empty BAD_DATA from primary provider, retrying with alternate RPCs...");
+      }
+    }
+
+    // Manual fallback rotation when RPC returns empty BAD_DATA
+    const rpcCandidates = getRpcUrlList(this.chainId);
+    for (let i = 0; i < rpcCandidates.length; i++) {
+      const rpcUrl = rpcCandidates[i];
+      try {
+        const fallbackProvider = new ethers.JsonRpcProvider(rpcUrl, this.chainId);
+        const fallbackContract = new ethers.Contract(this.address, BlogFactoryAbi.abi, fallbackProvider);
+        const result = await fallbackContract.getBlogsByOwner(owner);
+        if (typeof window !== "undefined") {
+          console.log(`[DexBlogFactory] getBlogsByOwner succeeded via fallback RPC ${rpcUrl}`);
+        }
+        return result;
+      } catch (error: any) {
+        if (!isEmptyBadData(error)) {
+          if (typeof window !== "undefined") {
+            console.log(`[DexBlogFactory] getBlogsByOwner error on ${rpcUrl}:`, {
+              message: error?.message,
+              code: error?.code,
+              info: error?.info,
+              error,
+            });
+          }
+          throw error;
+        }
+        if (typeof window !== "undefined") {
+          console.warn(`[DexBlogFactory] Fallback RPC ${rpcUrl} returned empty BAD_DATA; trying next...`);
+        }
+      }
+    }
+
+    throw new Error("All RPCs returned empty BAD_DATA for getBlogsByOwner");
   }
 
   /**
@@ -220,10 +299,8 @@ export class DexBlogFactory {
    * @returns Transaction receipt
    */
   async setSetupFee(fee: bigint): Promise<ethers.TransactionReceipt> {
-    if (!this.contract.signer) {
-      throw new Error("Signer required for write operations");
-    }
-    const tx = await this.contract.setSetupFee(fee);
+    const writeContract = this.getWriteContract();
+    const tx = await writeContract.setSetupFee(fee);
     const receipt = await tx.wait();
     return receipt;
   }
@@ -233,10 +310,8 @@ export class DexBlogFactory {
    * @returns Transaction receipt
    */
   async withdraw(): Promise<ethers.TransactionReceipt> {
-    if (!this.contract.signer) {
-      throw new Error("Signer required for write operations");
-    }
-    const tx = await this.contract.withdraw();
+    const writeContract = this.getWriteContract();
+    const tx = await writeContract.withdraw();
     const receipt = await tx.wait();
     return receipt;
   }

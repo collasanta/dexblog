@@ -29,8 +29,9 @@ function isArrayLikePost(post: any): boolean {
 }
 
 export class DexBlog {
-  private contract: ethers.Contract;
+  private contract: any;
   private provider: ethers.Provider;
+  private signer?: ethers.Signer;
   public readonly address: string;
   public readonly chainId: number;
 
@@ -38,18 +39,21 @@ export class DexBlog {
     this.address = config.address;
     this.chainId = config.chainId;
 
-    const providerOrSigner = config.signer || config.provider;
-    if (!providerOrSigner) {
+    const provider = config.provider || config.signer?.provider;
+    if (!provider) {
       throw new Error("Provider or signer required");
     }
 
-    this.provider =
-      config.signer?.provider || (config.provider as ethers.Provider);
-    this.contract = new ethers.Contract(
-      config.address,
-      BlogAbi.abi,
-      providerOrSigner
-    );
+    this.provider = provider;
+    this.signer = config.signer;
+    this.contract = new ethers.Contract(config.address, BlogAbi.abi, provider);
+  }
+
+  private getWriteContract(): ethers.Contract {
+    if (!this.signer) {
+      throw new Error("Signer required for write operations");
+    }
+    return this.contract.connect(this.signer);
   }
 
   /**
@@ -80,10 +84,8 @@ export class DexBlog {
     title: string,
     body: string
   ): Promise<PublishPostResult> {
-    if (!this.contract.signer) {
-      throw new Error("Signer required for write operations");
-    }
-    const tx = await this.contract.publish(title, body);
+    const writeContract = this.getWriteContract();
+    const tx = await writeContract.publish(title, body);
     const receipt = await tx.wait();
     
     // Extract postId from PostCreated event
@@ -126,10 +128,8 @@ export class DexBlog {
     newTitle: string,
     newBody: string
   ): Promise<ethers.TransactionReceipt> {
-    if (!this.contract.signer) {
-      throw new Error("Signer required for write operations");
-    }
-    const tx = await this.contract.editPost(id, newTitle, newBody);
+    const writeContract = this.getWriteContract();
+    const tx = await writeContract.editPost(id, newTitle, newBody);
     const receipt = await tx.wait();
     return receipt;
   }
@@ -140,10 +140,8 @@ export class DexBlog {
    * @returns Transaction receipt
    */
   async deletePost(id: number): Promise<ethers.TransactionReceipt> {
-    if (!this.contract.signer) {
-      throw new Error("Signer required for write operations");
-    }
-    const tx = await this.contract.deletePost(id);
+    const writeContract = this.getWriteContract();
+    const tx = await writeContract.deletePost(id);
     const receipt = await tx.wait();
     return receipt;
   }

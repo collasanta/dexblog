@@ -61,17 +61,71 @@ export const USDC_DECIMALS: Record<number, number> = {
 };
 
 /**
+ * Curated RPC providers per chain
+ * Handpicked reliable public RPC endpoints for better performance and reliability
+ * First RPC in each array is the default/primary RPC
+ */
+export const RPC_PROVIDERS: Record<number, string[]> = {
+  1: [
+    "https://eth.llamarpc.com",
+    "https://rpc.flashbots.net/fast",
+    "https://1rpc.io/eth",
+    "https://mainnet.gateway.tenderly.co",
+    "https://ethereum-public.nodies.app",
+  ],
+  10: [
+    "https://mainnet.optimism.io",
+    "https://optimism.drpc.org",
+    "https://optimism.api.onfinality.io/public",
+    "https://public-op-mainnet.fastnode.io",
+    "https://optimism-public.nodies.app",
+  ],
+  56: [
+    "https://bsc-dataseed1.binance.org",
+    "https://public-bsc-mainnet.fastnode.io",
+    "https://bsc.rpc.blxrbdn.com",
+    "https://1rpc.io/bnb",
+    "https://bsc-mainnet.public.blastapi.io",
+  ],
+  137: [
+    "https://polygon-rpc.com",
+  ],
+  8453: [
+    "https://mainnet.base.org", // Official RPC first for reliable data
+    "https://base.drpc.org",
+    "https://base.gateway.tenderly.co",
+    "https://base-public.nodies.app",
+    "https://base.llamarpc.com",
+  ],
+  42161: [
+    "https://arb1.arbitrum.io/rpc",
+    "https://arbitrum-one-rpc.publicnode.com",
+    "https://arbitrum.drpc.org",
+    "https://arbitrum.gateway.tenderly.co",
+    "https://arbitrum-one.public.blastapi.io",
+  ],
+  421614: [
+    "https://sepolia-rollup.arbitrum.io/rpc",
+    "https://arbitrum-sepolia.drpc.org",
+    "https://arbitrum-sepolia-rpc.publicnode.com",
+    "https://arbitrum-sepolia.gateway.tenderly.co",
+    "https://api.zan.top/arb-sepolia",
+  ],
+};
+
+/**
  * Default RPC URLs per chain
  * Uses official/public RPC endpoints - users can override with their own
+ * This is kept for backward compatibility - it uses the first RPC from RPC_PROVIDERS
  */
 export const DEFAULT_RPC_URLS: Record<number, string> = {
-  1: "https://ethereum.publicnode.com",
-  10: "https://mainnet.optimism.io",
-  56: "https://bsc-dataseed1.binance.org",
-  137: "https://polygon-rpc.com",
-  8453: "https://mainnet.base.org",
-  42161: "https://arb1.arbitrum.io/rpc",
-  421614: "https://sepolia-rollup.arbitrum.io/rpc",
+  1: RPC_PROVIDERS[1]?.[0] || "https://ethereum.publicnode.com",
+  10: RPC_PROVIDERS[10]?.[0] || "https://mainnet.optimism.io",
+  56: RPC_PROVIDERS[56]?.[0] || "https://bsc-dataseed1.binance.org",
+  137: RPC_PROVIDERS[137]?.[0] || "https://polygon-rpc.com",
+  8453: RPC_PROVIDERS[8453]?.[0] || "https://mainnet.base.org",
+  42161: RPC_PROVIDERS[42161]?.[0] || "https://arb1.arbitrum.io/rpc",
+  421614: RPC_PROVIDERS[421614]?.[0] || "https://sepolia-rollup.arbitrum.io/rpc",
 };
 
 /**
@@ -144,6 +198,15 @@ export function getFactoryAddress(chainId: number): string | null {
  */
 export function getDefaultRpcUrl(chainId: number): string | null {
   return DEFAULT_RPC_URLS[chainId] || null;
+}
+
+/**
+ * Get curated RPC providers for a chain
+ * @param chainId Chain ID
+ * @returns Array of RPC URLs or empty array if not supported
+ */
+export function getRpcProviders(chainId: number): string[] {
+  return RPC_PROVIDERS[chainId] || [];
 }
 
 /**
