@@ -7,17 +7,29 @@ import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 
 const codeExamples = {
-  "Create Blog": `import { getFactory } from "dex-blog-sdk";
+  "Create Blog": `import { getFactory, getUsdcAddress } from "dex-blog-sdk";
 import { ethers } from "ethers";
 
 const provider = new ethers.BrowserProvider(window.ethereum);
 const signer = await provider.getSigner();
 
-// Get factory instance
-const factory = getFactory(42161, { signer });
+// Get factory instance (Arbitrum One example)
+const chainId = 42161;
+const factory = getFactory(chainId, { signer });
 
-// Create a new blog (returns the blog address)
-const result = await factory.createBlogAsOwner("My Blog");
+// Check setup fee
+const setupFee = await factory.getSetupFee();
+
+// Approve USDC spending if fee > 0 (uses helper for USDC address)
+if (setupFee > 0n) {
+  const usdcAddress = getUsdcAddress(chainId)!;
+  const usdcAbi = ["function approve(address spender, uint256 amount) external returns (bool)"];
+  const usdc = new ethers.Contract(usdcAddress, usdcAbi, signer);
+  await usdc.approve(factory.address, setupFee);
+}
+
+// Create a new blog (no ETH value needed)
+const result = await factory.createBlog("My Blog");
 
 // Save the blog address for later use
 const blogAddress = result.blogAddress;
@@ -30,7 +42,8 @@ console.log("Blog created:", blogAddress);`,
 const blogAddress = "0x...";
 
 // Get blog instance to interact with it
-const blog = getBlog(blogAddress, 42161);
+const chainId = 42161; // Arbitrum One
+const blog = getBlog(blogAddress, chainId);
 
 // Now you can use the blog instance
 const info = await blog.getInfo();

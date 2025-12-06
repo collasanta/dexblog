@@ -147,11 +147,11 @@ export const BLOCK_EXPLORERS: Record<number, string> = {
 export const CHAIN_NAMES: Record<number, string> = {
   1: "Ethereum Mainnet",
   10: "Optimism",
-  56: "BNB Smart Chain",
+  56: "BNB",
   137: "Polygon",
   8453: "Base",
   42161: "Arbitrum One",
-  421614: "Arbitrum Sepolia",
+  421614: "Arb. Testnet",
 };
 
 /**

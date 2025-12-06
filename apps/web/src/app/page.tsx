@@ -76,7 +76,7 @@ export default function Home() {
             <FeatureCard
               icon={Globe}
               title="Multi-Chain"
-              description="Deploy on Base, Arbitrum, Optimism, or BNB Chain. Choose your preferred chain."
+              description="Deploy on Base, Arbitrum, Optimism, or BNB. Choose your preferred chain."
             />
             <FeatureCard
               icon={Code}

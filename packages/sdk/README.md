@@ -8,9 +8,12 @@ A TypeScript SDK for interacting with DexBlog decentralized blogging contracts o
 - 🏭 **Factory Support**: Create new blogs through the factory contract
 - ⚡ **Fast Loading**: Optimized post fetching with pagination support
 - 🔗 **Transaction Hashes**: Automatically fetch transaction hashes for all posts
-- 🌐 **Multi-Chain**: Support for Arbitrum, Base, Optimism, BNB Chain, and more
+- 🌐 **Multi-Chain**: Support for Arbitrum One, Base, Optimism, BNB, and Arb. Testnet (Arbitrum Sepolia). Ethereum / Polygon planned (not yet deployed).
 - 💰 **USDC Payments**: Factory uses USDC for blog creation fees
 - 📦 **TypeScript**: Full TypeScript support with type definitions
+
+Deployed: Arbitrum One, Base, Optimism, BNB, Arb. Testnet (Arbitrum Sepolia).  
+Planned (not yet deployed): Ethereum Mainnet, Polygon.
 
 ## Installation
 
@@ -24,111 +27,72 @@ pnpm add dex-blog-sdk ethers
 
 ## Quick Start
 
-### Reading Posts
+### Read-only (no signer)
 
 ```typescript
 import { getBlog } from "dex-blog-sdk";
-import { ethers } from "ethers";
 
-// Get a blog instance
-const blog = getBlog(
-  "0x...", // Blog contract address
-  42161,   // Chain ID (Arbitrum)
-  {
-    rpcUrl: "https://arbitrum.drpc.org" // Optional: uses default if not provided
-  }
-);
+const chainId = 42161; // Arbitrum One
+const blog = getBlog("0xBlog...", chainId); // uses default RPC for the chain
 
-// Get all posts
-const posts = await blog.getPosts();
+// Faster reads: skip hashes
+const posts = await blog.getPosts({ withHashes: false });
 
-// Get posts without transaction hashes (faster)
-const postsFast = await blog.getPosts({ withHashes: false });
+// Paginated
+const paginatedPosts = await blog.getPosts({ offset: 0, limit: 10 });
 
-// Get posts with pagination
-const paginatedPosts = await blog.getPosts({
-  offset: 0,
-  limit: 10,
-  includeDeleted: false
-});
-
-// Get a single post
-const post = await blog.getPost(0);
-
-// Get blog info
-const info = await blog.getInfo();
-console.log(info.name, info.owner, info.postCount);
+// Info
+const info = await blog.getInfo(); // { name, owner, postCount, address }
 ```
 
-### Publishing Posts
+### Create a blog (with signer + USDC approval)
 
 ```typescript
-import { getBlog } from "dex-blog-sdk";
+import { getFactory, getUsdcAddress } from "dex-blog-sdk";
 import { ethers } from "ethers";
 
-// Connect with a signer (MetaMask, WalletConnect, etc.)
 const provider = new ethers.BrowserProvider(window.ethereum);
 const signer = await provider.getSigner();
 
-const blog = getBlog(
-  "0x...", // Blog contract address
-  42161,   // Chain ID
-  { signer }
-);
+const chainId = 42161; // Arbitrum One (example)
+const factory = getFactory(chainId, { signer });
+const setupFee = await factory.getSetupFee();
 
-// Publish a new post
+// Approve USDC if fee > 0 (no ETH value needed)
+if (setupFee > 0n) {
+  const usdcAddress = getUsdcAddress(chainId)!;
+  const usdcAbi = ["function approve(address spender, uint256 amount) external returns (bool)"];
+  const usdc = new ethers.Contract(usdcAddress, usdcAbi, signer);
+  await usdc.approve(factory.address, setupFee);
+}
+
+const { blogAddress, receipt } = await factory.createBlog("My Blog");
+console.log("New blog address:", blogAddress, "tx:", receipt.hash);
+```
+
+### Publish & edit posts (with signer)
+
+```typescript
+import { getBlog } from "dex-blog-sdk";
+import { ethers } from "ethers";
+
+const provider = new ethers.BrowserProvider(window.ethereum);
+const signer = await provider.getSigner();
+
+const blog = getBlog("0xBlog...", 42161, { signer });
+
+// Publish
 const result = await blog.publish(
   "My First Post",
   "# Hello World\n\nThis is my first decentralized blog post!"
 );
+console.log("Post ID:", result.postId, "tx:", result.receipt.hash);
 
-console.log("Post ID:", result.postId);
-console.log("Transaction hash:", result.receipt.hash);
-
-// Edit a post
+// Edit
 await blog.editPost(0, "Updated Title", "Updated content");
 
-// Delete a post
+// Delete (soft delete)
 await blog.deletePost(0);
-```
-
-### Creating a New Blog
-
-```typescript
-import { getFactory } from "dex-blog-sdk";
-import { ethers } from "ethers";
-
-const provider = new ethers.BrowserProvider(window.ethereum);
-const signer = await provider.getSigner();
-
-// Get factory instance
-const factory = getFactory(42161, { signer }); // Arbitrum
-
-// Check if blog creation is free
-const isFree = await factory.isFree();
-
-if (isFree) {
-  // Create blog as factory owner (free)
-  const result = await factory.createBlogAsOwner("My Blog Name");
-  console.log("New blog address:", result.blogAddress);
-} else {
-  // Get setup fee (in USDC for most chains)
-  const setupFee = await factory.getSetupFee();
-  
-  // IMPORTANT: Approve USDC spending BEFORE creating the blog
-  // The factory contract uses USDC as payment token (not ETH)
-  // You need the USDC contract address for your chain
-  const usdcAddress = "0x..."; // USDC address for Arbitrum
-  const usdcAbi = ["function approve(address spender, uint256 amount) external returns (bool)"];
-  const usdc = new ethers.Contract(usdcAddress, usdcAbi, signer);
-  
-  // Approve the factory to spend USDC
-  await usdc.approve(factory.address, setupFee);
-  
-  // Create blog (no ETH value needed - USDC is transferred via ERC20)
-  const result = await factory.createBlog("My Blog Name");
-  console.log("New blog address:", result.blogAddress);
-}
 ```
 
 ### Provider Helpers & RPC Fallback
@@ -176,7 +140,7 @@ const blogs = await factory.getBlogsByOwner(await signer.getAddress());
 ```typescript
 import { eip1193ProviderToSigner, DexBlog } from "dex-blog-sdk";
 
-const chainId = 42161; // Arbitrum
+const chainId = 42161; // Arbitrum One
 const { provider, signer } = await eip1193ProviderToSigner(window.ethereum, { chainId });
 
 const blog = new DexBlog({

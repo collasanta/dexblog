@@ -197,12 +197,13 @@ The frontend is designed to be deployed on Vercel:
 
 ## Supported Chains
 
-- Ethereum Mainnet
 - Base
-- Polygon
-- Arbitrum
+- Arbitrum One
+- Arb. Testnet (Arbitrum Sepolia)
 - Optimism
-- BNB Chain
+- BNB
+
+Planned (not yet deployed): Ethereum Mainnet, Polygon.
 
 ## Environment Variables
 
