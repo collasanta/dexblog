@@ -115,10 +115,18 @@ if (isFree) {
   // Get setup fee (in USDC for most chains)
   const setupFee = await factory.getSetupFee();
   
-  // Note: You need to approve USDC spending before creating the blog
+  // IMPORTANT: Approve USDC spending BEFORE creating the blog
   // The factory contract uses USDC as payment token (not ETH)
-  // Create blog with USDC payment
-  const result = await factory.createBlog("My Blog Name", setupFee);
+  // You need the USDC contract address for your chain
+  const usdcAddress = "0x..."; // USDC address for Arbitrum
+  const usdcAbi = ["function approve(address spender, uint256 amount) external returns (bool)"];
+  const usdc = new ethers.Contract(usdcAddress, usdcAbi, signer);
+  
+  // Approve the factory to spend USDC
+  await usdc.approve(factory.address, setupFee);
+  
+  // Create blog (no ETH value needed - USDC is transferred via ERC20)
+  const result = await factory.createBlog("My Blog Name");
   console.log("New blog address:", result.blogAddress);
 }
 ```
@@ -247,13 +255,37 @@ new DexBlogFactory(config: DexBlogFactoryConfig)
 
 #### Methods
 
-##### `createBlog(name: string, setupFee: bigint): Promise<CreateBlogResult>`
+##### `createBlog(name: string, overrides?: Overrides): Promise<CreateBlogResult>`
 
-Create a new blog with payment.
+Create a new blog with USDC payment.
+
+**Important:** This method does NOT accept ETH value. USDC must be approved separately before calling this method.
+
+**Steps:**
+1. Get the setup fee: `const setupFee = await factory.getSetupFee()`
+2. If `setupFee > 0`, approve USDC spending: `await usdc.approve(factory.address, setupFee)`
+3. Call `createBlog()` - no ETH value needed
+
+**Parameters:**
+- `name: string` - Name for the new blog
+- `overrides?: Overrides` - Optional transaction overrides (gas settings only - do NOT include value)
 
 **Returns:**
 - `blogAddress: string` - Address of the new blog
 - `receipt: TransactionReceipt` - Transaction receipt
+
+**Example:**
+```typescript
+// First approve USDC (if fee > 0)
+const setupFee = await factory.getSetupFee();
+if (setupFee > 0n) {
+  const usdc = new ethers.Contract(usdcAddress, ERC20_ABI, signer);
+  await usdc.approve(factory.address, setupFee);
+}
+
+// Then create blog (no ETH value)
+const result = await factory.createBlog("My Blog");
+```
 
 ##### `createBlogAsOwner(name: string): Promise<CreateBlogResult>`
 

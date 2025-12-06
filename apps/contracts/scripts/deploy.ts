@@ -1,42 +1,25 @@
 import { ethers } from "hardhat";
 import * as dotenv from "dotenv";
+import { getUsdcAddress, getUsdcDecimals } from "dex-blog-sdk";
 
 dotenv.config();
-
-// USDC addresses per chain
-const USDC_ADDRESSES: Record<string, string> = {
-  base: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-  polygon: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
-  arbitrum: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
-  arbitrumSepolia: "0x75faf114eafb1BDbe2F0316DF893fd58cE87D3E1", // Arbitrum Sepolia USDC (checksum will be fixed by ethers)
-  optimism: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
-  mainnet: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-  bsc: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", // BSC USDC uses 18 decimals
-};
-
-// USDC decimals per chain
-const USDC_DECIMALS: Record<string, number> = {
-  base: 6,
-  polygon: 6,
-  arbitrum: 6,
-  arbitrumSepolia: 6,
-  optimism: 6,
-  mainnet: 6,
-  bsc: 18, // BSC USDC uses 18 decimals
-};
 
 async function main() {
   const network = await ethers.provider.getNetwork();
   const networkName = network.name;
+  const chainId = Number(network.chainId);
   
   // Get USDC decimals for current network (default to 6)
-  const usdcDecimals = USDC_DECIMALS[networkName] || 6;
+  const usdcDecimals = getUsdcDecimals(chainId) || 6;
   
   // Setup fee: 10 USDC (with correct decimals per chain)
   const SETUP_FEE = ethers.parseUnits("10", usdcDecimals);
   
   // Get USDC address for current network
-  let usdcAddressRaw = USDC_ADDRESSES[networkName] || USDC_ADDRESSES.base;
+  let usdcAddressRaw = getUsdcAddress(chainId) || "";
+  if (!usdcAddressRaw) {
+    throw new Error(`USDC address not configured for ${networkName} (chainId: ${chainId})`);
+  }
   // Fix checksum for ethers.js (convert to lowercase first, then getAddress will fix checksum)
   const usdcAddress = ethers.getAddress(usdcAddressRaw.toLowerCase());
 

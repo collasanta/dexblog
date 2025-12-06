@@ -3,6 +3,7 @@ export { DexBlogFactory } from "./DexBlogFactory";
 export * from "./types";
 export * from "./chains";
 export * from "./helpers";
+export * from "./rpc";
 
 // Re-export ABIs for advanced usage
 export { default as BlogAbi } from "./abis/Blog.json";

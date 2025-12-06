@@ -1,40 +1,22 @@
 import { ethers } from "hardhat";
 import * as dotenv from "dotenv";
+import { getChainConfig, getFactoryAddress, getUsdcDecimals } from "dex-blog-sdk";
 
 dotenv.config();
-
-// Factory addresses per chain
-const FACTORY_ADDRESSES: Record<string, string> = {
-  arbitrum: "0x243924EEE57aa31832A957c11416AB34f5009a67",
-  arbitrumSepolia: "0xccb9EFF798D12D78d179c81aEC83c9E9F974013B",
-  base: "0x8Ccc0Bb6AF35F9067A7110Ac50666159e399A5F3",
-  optimism: "0x96e8005727eCAd421B4cdded7B08d240f522D96E",
-  bsc: "0x96e8005727eCAd421B4cdded7B08d240f522D96E",
-};
-
-// USDC decimals per chain
-const USDC_DECIMALS: Record<string, number> = {
-  arbitrum: 6,
-  arbitrumSepolia: 6,
-  base: 6,
-  optimism: 6,
-  bsc: 18,
-};
 
 async function main() {
   const network = await ethers.provider.getNetwork();
   const networkName = network.name;
   const chainId = Number(network.chainId);
   
-  // Get factory address for current network
-  const factoryAddressRaw = FACTORY_ADDRESSES[networkName];
-  if (!factoryAddressRaw) {
-    throw new Error(`Factory not deployed on ${networkName} (chainId: ${chainId}). Available networks: ${Object.keys(FACTORY_ADDRESSES).join(", ")}`);
+  const chainConfig = getChainConfig(chainId);
+  const FACTORY_ADDRESS = getFactoryAddress(chainId);
+  if (!FACTORY_ADDRESS) {
+    throw new Error(`Factory not deployed on ${networkName} (chainId: ${chainId}). Available chainIds: ${chainConfig ? chainConfig.id : "n/a"}`);
   }
-  const FACTORY_ADDRESS = ethers.getAddress(factoryAddressRaw.toLowerCase());
   
   // Get USDC decimals for current network (default to 6)
-  const usdcDecimals = USDC_DECIMALS[networkName] || 6;
+  const usdcDecimals = getUsdcDecimals(chainId) || 6;
   
   // Get new fee from environment variable or default to 0 (free)
   const newFeeAmount = process.env.NEW_FEE ? parseFloat(process.env.NEW_FEE) : 0;

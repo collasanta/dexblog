@@ -1,14 +1,19 @@
 import { ethers } from "hardhat";
 import * as dotenv from "dotenv";
+import { getFactoryAddress, getUsdcDecimals } from "dex-blog-sdk";
 
 dotenv.config();
-
-// Factory address on Arbitrum Mainnet
-const FACTORY_ADDRESS = "0x243924EEE57aa31832A957c11416AB34f5009a67";
 
 async function main() {
   const network = await ethers.provider.getNetwork();
   const networkName = network.name;
+  const chainId = Number(network.chainId);
+  const FACTORY_ADDRESS = getFactoryAddress(chainId);
+  const usdcDecimals = getUsdcDecimals(chainId) || 6;
+
+  if (!FACTORY_ADDRESS) {
+    throw new Error(`Factory not deployed on ${networkName} (chainId: ${chainId})`);
+  }
   
   console.log("Checking BlogFactory status...");
   console.log("Network:", networkName);
@@ -35,7 +40,7 @@ async function main() {
   console.log("\nFactory Info:");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log("Factory Owner:", factoryOwner);
-  console.log("Setup Fee:", ethers.formatUnits(setupFee, 6), "USDC");
+  console.log("Setup Fee:", ethers.formatUnits(setupFee, usdcDecimals), "USDC");
   console.log("Total Blogs:", totalBlogs.toString());
   console.log("USDC Address:", usdcAddress);
   

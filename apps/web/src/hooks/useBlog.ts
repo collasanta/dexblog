@@ -5,7 +5,7 @@ import { decodeEventLog } from "viem";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BLOG_ABI } from "@/lib/contracts";
 import { useState } from "react";
-import { DexBlog } from "dex-blog-sdk";
+import { DexBlog, getRpcUrlWithFallback } from "dex-blog-sdk";
 import { JsonRpcProvider } from "ethers";
 
 export interface Post {
@@ -67,23 +67,7 @@ export function useBlog(address: `0x${string}` | undefined) {
       }
 
       try {
-        // Get RPC URL from publicClient's transport
-        const DRPC_URLS: Record<number, string> = {
-          1: process.env.NEXT_PUBLIC_MAINNET_RPC_URL || "https://eth.drpc.org",
-          137: process.env.NEXT_PUBLIC_POLYGON_RPC_URL || "https://polygon.drpc.org",
-          42161: process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || "https://arbitrum.drpc.org",
-          421614: process.env.NEXT_PUBLIC_ARBITRUM_SEPOLIA_RPC_URL || "https://arbitrum-sepolia.drpc.org",
-          10: process.env.NEXT_PUBLIC_OPTIMISM_RPC_URL || "https://optimism.drpc.org",
-          8453: process.env.NEXT_PUBLIC_BASE_RPC_URL || "https://mainnet.base.org",
-          56: process.env.NEXT_PUBLIC_BSC_RPC_URL || "https://bsc.drpc.org",
-        };
-
-        const rpcUrl = DRPC_URLS[chainId];
-        if (!rpcUrl) {
-          return [];
-        }
-
-        const provider = new JsonRpcProvider(rpcUrl, chainId);
+        const { provider } = await getRpcUrlWithFallback(chainId, { timeoutMs: 8000 });
         const blog = new DexBlog({
           address,
           chainId,
@@ -122,22 +106,7 @@ export function useBlog(address: `0x${string}` | undefined) {
       }
 
       try {
-        const DRPC_URLS: Record<number, string> = {
-          1: process.env.NEXT_PUBLIC_MAINNET_RPC_URL || "https://eth.drpc.org",
-          137: process.env.NEXT_PUBLIC_POLYGON_RPC_URL || "https://polygon.drpc.org",
-          42161: process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || "https://arbitrum.drpc.org",
-          421614: process.env.NEXT_PUBLIC_ARBITRUM_SEPOLIA_RPC_URL || "https://arbitrum-sepolia.drpc.org",
-          10: process.env.NEXT_PUBLIC_OPTIMISM_RPC_URL || "https://optimism.drpc.org",
-          8453: process.env.NEXT_PUBLIC_BASE_RPC_URL || "https://mainnet.base.org",
-          56: process.env.NEXT_PUBLIC_BSC_RPC_URL || "https://bsc.drpc.org",
-        };
-
-        const rpcUrl = DRPC_URLS[chainId];
-        if (!rpcUrl) {
-          return new Map();
-        }
-
-        const provider = new JsonRpcProvider(rpcUrl, chainId);
+        const { provider } = await getRpcUrlWithFallback(chainId, { timeoutMs: 8000 });
         const blog = new DexBlog({
           address,
           chainId,

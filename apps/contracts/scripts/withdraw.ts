@@ -1,14 +1,19 @@
 import { ethers } from "hardhat";
 import * as dotenv from "dotenv";
+import { getFactoryAddress, getUsdcDecimals } from "dex-blog-sdk";
 
 dotenv.config();
-
-// Factory address on Arbitrum Mainnet
-const FACTORY_ADDRESS = "0x243924EEE57aa31832A957c11416AB34f5009a67";
 
 async function main() {
   const network = await ethers.provider.getNetwork();
   const networkName = network.name;
+  const chainId = Number(network.chainId);
+  const FACTORY_ADDRESS = getFactoryAddress(chainId);
+  const usdcDecimals = getUsdcDecimals(chainId) || 6;
+
+  if (!FACTORY_ADDRESS) {
+    throw new Error(`Factory not deployed on ${networkName} (chainId: ${chainId})`);
+  }
   
   console.log("Withdrawing USDC fees from BlogFactory...");
   console.log("Network:", networkName);
@@ -43,7 +48,7 @@ async function main() {
   
   // Check factory USDC balance before withdrawal
   const factoryBalanceBefore = await usdc.balanceOf(FACTORY_ADDRESS);
-  const decimals = await usdc.decimals();
+  const decimals = usdcDecimals || (await usdc.decimals());
   console.log("Factory USDC balance before withdrawal:", ethers.formatUnits(factoryBalanceBefore, decimals), "USDC");
   
   if (factoryBalanceBefore === 0n) {

@@ -2,13 +2,14 @@
 
 ## Overview
 
-The BlogFactory uses a **flexible fee system** where:
+The BlogFactory uses a **flexible fee system** with **USDC payments** where:
 - ✅ **Factory deployer pays ZERO fees** (only deployment gas)
-- ✅ **Users pay setup fee** when creating blogs
-- ✅ **Fees are collected** in the factory contract
-- ✅ **Owner can withdraw** collected fees anytime
+- ✅ **Users pay setup fee in USDC** when creating blogs (via ERC20 approve + transferFrom)
+- ✅ **Fees are collected in USDC** in the factory contract
+- ✅ **Owner can withdraw** collected USDC fees anytime
 - ✅ **Fee can be changed dynamically** by owner
 - ✅ **Factory ownership can be transferred** by owner
+- ⚠️ **Important:** `createBlog()` does NOT accept ETH value - USDC must be approved separately
 
 ---
 
@@ -18,7 +19,8 @@ The BlogFactory uses a **flexible fee system** where:
 
 ```solidity
 // You deploy the factory ONCE
-BlogFactory factory = new BlogFactory(0.02 ether); // ~$50 setup fee
+// Constructor takes payment token address and setup fee in payment token units
+BlogFactory factory = new BlogFactory(usdcAddress, 10000000); // 10 USDC (6 decimals)
 
 // Cost: ~2.5M gas (~$0.50 on Base)
 // You pay: Only gas fees, NO setup fee
@@ -29,19 +31,23 @@ BlogFactory factory = new BlogFactory(0.02 ether); // ~$50 setup fee
 ### 2. Users Create Blogs (They Pay the Fee)
 
 ```solidity
-// User calls createBlog() and pays the setup fee
-factory.createBlog{value: 0.02 ether}("My Blog");
+// User must first approve USDC spending
+usdc.approve(factoryAddress, setupFee);
 
-// Fee goes to: factory contract balance
+// Then user calls createBlog() - no ETH value needed
+// USDC is transferred via ERC20 transferFrom
+factory.createBlog("My Blog");
+
+// Fee goes to: factory contract USDC balance
 // Factory owner can withdraw later
 ```
 
 ### 3. Fee Collection Flow
 
 ```
-User → createBlog() → Pays setupFee → Factory Contract Balance
-                                              ↓
-                                    Owner withdraws via withdraw()
+User → Approve USDC → createBlog() → USDC transferFrom → Factory Contract USDC Balance
+                                                                    ↓
+                                                      Owner withdraws via withdraw()
 ```
 
 ---
@@ -54,11 +60,11 @@ User → createBlog() → Pays setupFee → Factory Contract Balance
 // Set to FREE (no fee)
 factory.setSetupFee(0);
 
-// Set to $50 equivalent
-factory.setSetupFee(0.02 ether);
+// Set to 10 USDC (6 decimals)
+factory.setSetupFee(10000000); // 10 * 10^6
 
-// Set to any amount
-factory.setSetupFee(1000000000000000); // 0.001 ETH
+// Set to any amount (in payment token units)
+factory.setSetupFee(5000000); // 5 USDC
 ```
 
 **Who can call:** Only `factoryOwner`
@@ -84,12 +90,12 @@ factory.transferFactoryOwnership(newOwnerAddress);
 ### Withdraw Collected Fees
 
 ```solidity
-factory.withdraw(); // Sends all ETH to factoryOwner
+factory.withdraw(); // Sends all USDC to factoryOwner
 ```
 
 **Who can call:** Only `factoryOwner`
 
-**What it does:** Transfers entire contract balance to owner
+**What it does:** Transfers entire USDC balance to owner
 
 ---
 
@@ -99,49 +105,50 @@ factory.withdraw(); // Sends all ETH to factoryOwner
 
 ```solidity
 // Deploy with 0 fee
-BlogFactory factory = new BlogFactory(0);
+BlogFactory factory = new BlogFactory(usdcAddress, 0);
 
-// Users create blogs for FREE
-factory.createBlog{value: 0}("Free Blog"); // ✅ Works!
+// Users create blogs for FREE (no approval needed)
+factory.createBlog("Free Blog"); // ✅ Works!
 ```
 
 ### Scenario 2: Start Free, Add Fee Later
 
 ```solidity
 // Deploy free
-BlogFactory factory = new BlogFactory(0);
+BlogFactory factory = new BlogFactory(usdcAddress, 0);
 
-// Later, owner adds fee
-factory.setSetupFee(0.02 ether);
+// Later, owner adds fee (10 USDC)
+factory.setSetupFee(10000000); // 10 * 10^6
 
-// Now users must pay
-factory.createBlog{value: 0.02 ether}("Paid Blog");
+// Now users must approve and pay
+usdc.approve(factoryAddress, 10000000);
+factory.createBlog("Paid Blog");
 ```
 
 ### Scenario 3: Start Paid, Make Free Later
 
 ```solidity
 // Deploy with fee
-BlogFactory factory = new BlogFactory(0.02 ether);
+BlogFactory factory = new BlogFactory(usdcAddress, 10000000); // 10 USDC
 
 // Later, owner removes fee
 factory.setSetupFee(0);
 
-// Now free!
-factory.createBlog{value: 0}("Now Free Blog");
+// Now free! (no approval needed)
+factory.createBlog("Now Free Blog");
 ```
 
 ### Scenario 4: Change Fee Amount
 
 ```solidity
-// Start at $50
-factory.setSetupFee(0.02 ether);
+// Start at 10 USDC
+factory.setSetupFee(10000000); // 10 * 10^6
 
-// Change to $10
-factory.setSetupFee(0.004 ether);
+// Change to 5 USDC
+factory.setSetupFee(5000000); // 5 * 10^6
 
-// Change to $100
-factory.setSetupFee(0.04 ether);
+// Change to 20 USDC
+factory.setSetupFee(20000000); // 20 * 10^6
 ```
 
 ---
@@ -163,21 +170,24 @@ factory.setSetupFee(0.04 ether);
 
 ```solidity
 // 1. You deploy factory (you pay ~$0.50 gas)
-BlogFactory factory = new BlogFactory(0.02 ether);
+BlogFactory factory = new BlogFactory(usdcAddress, 10000000); // 10 USDC
 
-// 2. Users create blogs (they pay $50 each)
-factory.createBlog{value: 0.02 ether}("Blog 1");
-factory.createBlog{value: 0.02 ether}("Blog 2");
-// Factory now has 0.04 ETH
+// 2. Users create blogs (they pay 10 USDC each)
+// User must approve first:
+usdc.approve(factoryAddress, 10000000);
+factory.createBlog("Blog 1");
+usdc.approve(factoryAddress, 10000000);
+factory.createBlog("Blog 2");
+// Factory now has 20 USDC
 
 // 3. You withdraw fees
-factory.withdraw(); // You receive 0.04 ETH
+factory.withdraw(); // You receive 20 USDC
 
 // 4. You change fee to FREE
 factory.setSetupFee(0);
 
-// 5. More users create blogs for FREE
-factory.createBlog{value: 0}("Free Blog");
+// 5. More users create blogs for FREE (no approval needed)
+factory.createBlog("Free Blog");
 
 // 6. You transfer ownership to DAO
 factory.transferFactoryOwnership(daoAddress);
@@ -211,16 +221,27 @@ factory.transferFactoryOwnership(daoAddress);
 ## Frontend Integration
 
 ```typescript
-// Check current fee
+import { ethers } from "ethers";
+
+// Check current fee (in USDC units)
 const fee = await factory.getSetupFee();
-console.log(`Current fee: ${ethers.formatEther(fee)} ETH`);
+console.log(`Current fee: ${ethers.formatUnits(fee, 6)} USDC`); // USDC has 6 decimals
 
 // Owner can change fee (requires signer)
-await factory.setSetupFee(ethers.parseEther("0.02"));
+await factory.setSetupFee(ethers.parseUnits("10", 6)); // 10 USDC
+
+// Before creating blog, user must approve USDC
+const usdcAddress = "0x..."; // USDC address for the chain
+const usdcAbi = ["function approve(address spender, uint256 amount) external returns (bool)"];
+const usdc = new ethers.Contract(usdcAddress, usdcAbi, signer);
+await usdc.approve(factory.address, fee);
+
+// Then create blog (no ETH value)
+const result = await factory.createBlog("My Blog");
 
 // Listen for fee changes
 factory.on("SetupFeeChanged", (oldFee, newFee) => {
-  console.log(`Fee changed: ${ethers.formatEther(oldFee)} → ${ethers.formatEther(newFee)}`);
+  console.log(`Fee changed: ${ethers.formatUnits(oldFee, 6)} → ${ethers.formatUnits(newFee, 6)} USDC`);
 });
 ```
 

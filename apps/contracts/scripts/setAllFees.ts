@@ -1,50 +1,52 @@
 import { ethers } from "hardhat";
 import * as dotenv from "dotenv";
+import {
+  getChainConfig,
+  getFactoryAddress,
+  getSupportedChainIds,
+  getUsdcDecimals,
+  getRpcUrlWithFallback,
+} from "dex-blog-sdk";
 
 dotenv.config();
-
-const FACTORY_ADDRESSES: Record<string, string> = {
-  arbitrum: "0x243924EEE57aa31832A957c11416AB34f5009a67",
-  arbitrumSepolia: "0xccb9EFF798D12D78d179c81aEC83c9E9F974013B",
-  base: "0x8Ccc0Bb6AF35F9067A7110Ac50666159e399A5F3",
-  optimism: "0x96e8005727eCAd421B4cdded7B08d240f522D96E",
-  bsc: "0x96e8005727eCAd421B4cdded7B08d240f522D96E",
-};
-
-const USDC_DECIMALS: Record<string, number> = {
-  arbitrum: 6,
-  arbitrumSepolia: 6,
-  base: 6,
-  optimism: 6,
-  bsc: 18,
-};
-
-const RPC_URLS: Record<string, string> = {
-  arbitrum: process.env.ARBITRUM_RPC_URL || "https://arb1.arbitrum.io/rpc",
-  arbitrumSepolia: process.env.ARBITRUM_SEPOLIA_RPC_URL || "https://sepolia-rollup.arbitrum.io/rpc",
-  base: process.env.BASE_RPC_URL || "https://mainnet.base.org",
-  optimism: process.env.OPTIMISM_RPC_URL || "https://mainnet.optimism.io",
-  bsc: process.env.BSC_RPC_URL || "https://bsc-dataseed1.binance.org",
-};
 
 async function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function setFactoryFee(
-  network: string,
-  factoryAddress: string,
-  rpcUrl: string,
+  chainId: number,
   feeAmount: number,
   privateKey: string
 ) {
+  const chainConfig = getChainConfig(chainId);
+  const network = chainConfig?.name || `chain-${chainId}`;
+  const factoryAddress = getFactoryAddress(chainId);
+  const usdcDecimals = getUsdcDecimals(chainId) || 6;
+  const envUrls: Record<number, string | undefined> = {
+    42161: process.env.ARBITRUM_RPC_URL,
+    421614: process.env.ARBITRUM_SEPOLIA_RPC_URL,
+    8453: process.env.BASE_RPC_URL,
+    10: process.env.OPTIMISM_RPC_URL,
+    56: process.env.BSC_RPC_URL,
+    137: process.env.POLYGON_RPC_URL,
+    1: process.env.MAINNET_RPC_URL,
+  };
+  const rpc = await getRpcUrlWithFallback(chainId, {
+    envRpcUrl: envUrls[chainId],
+    timeoutMs: 8000,
+  });
+
   try {
-    console.log(`\n[${network}] Connecting to ${rpcUrl}...`);
+    if (!factoryAddress || !rpcUrl) {
+      throw new Error("Missing factory address or RPC URL");
+    }
+
+    console.log(`\n[${network}] Connecting to ${rpc.url}...`);
     
-    const provider = new ethers.JsonRpcProvider(rpcUrl);
+    const provider = rpc.provider;
     const wallet = new ethers.Wallet(privateKey, provider);
     
-    const usdcDecimals = USDC_DECIMALS[network] || 6;
     const newFee = ethers.parseUnits(feeAmount.toString(), usdcDecimals);
     
     console.log(`[${network}] Wallet address: ${wallet.address}`);
@@ -132,25 +134,20 @@ async function main() {
   console.log("=".repeat(100));
   
   // Get networks to update (exclude arbitrumSepolia)
-  const networksToUpdate = Object.keys(FACTORY_ADDRESSES).filter(
-    network => network !== "arbitrumSepolia"
-  );
+  const chainIds = getSupportedChainIds().filter((id) => id !== 421614); // exclude Arbitrum Sepolia
   
-  console.log(`\nNetworks to update: ${networksToUpdate.join(", ")}\n`);
+  console.log(`\nNetworks to update: ${chainIds.join(", ")}\n`);
   
   const results = [];
   
   // Process sequentially to avoid nonce issues
-  for (let i = 0; i < networksToUpdate.length; i++) {
-    const network = networksToUpdate[i];
-    const factoryAddress = FACTORY_ADDRESSES[network];
-    const rpcUrl = RPC_URLS[network];
-    
-    const result = await setFactoryFee(network, factoryAddress, rpcUrl, feeAmount, privateKey);
+  for (let i = 0; i < chainIds.length; i++) {
+    const chainId = chainIds[i];
+    const result = await setFactoryFee(chainId, feeAmount, privateKey);
     results.push(result);
     
     // Add delay between networks (except for the last one)
-    if (i < networksToUpdate.length - 1) {
+    if (i < chainIds.length - 1) {
       await sleep(2000); // 2 second delay between networks
     }
   }

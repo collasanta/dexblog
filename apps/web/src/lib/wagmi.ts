@@ -1,20 +1,74 @@
-import { http, createConfig } from "wagmi";
+import { createConfig } from "wagmi";
 import { base, polygon, arbitrum, arbitrumSepolia, optimism, mainnet, bsc } from "wagmi/chains";
 import { injected, walletConnect } from "wagmi/connectors";
+import { getRpcUrlList } from "dex-blog-sdk";
 
 const projectId = process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID || "";
 
-// RPC endpoints (using public endpoints, can be overridden via env vars)
-const DRPC_URLS = {
-  // Base: Use public RPC endpoint (more reliable than dRPC for Base)
-  base: "https://base-mainnet.g.alchemy.com/v2/demo", // Alchemy public demo endpoint (fallback to mainnet.base.org if fails)
-  polygon: "https://polygon.drpc.org",
-  arbitrum: "https://arbitrum.drpc.org",
-  arbitrumSepolia: "https://arbitrum-sepolia.drpc.org", // dRPC Arbitrum Sepolia endpoint
-  optimism: "https://optimism.drpc.org",
-  mainnet: "https://eth.drpc.org",
-  bsc: "https://bsc.drpc.org",
-};
+function isRetriableStatus(status: number) {
+  return status === 429 || status === 408 || status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+function fallbackTransport(chainId: number) {
+  return () => ({
+    async request({ method, params }) {
+      const candidates = await getRpcUrlList(chainId);
+      if (!candidates.length) {
+        throw new Error(`No RPC candidates for chain ${chainId}`);
+      }
+
+      const body = JSON.stringify({
+        jsonrpc: "2.0",
+        id: Date.now(),
+        method,
+        params,
+      });
+
+      let lastError: any = null;
+
+      for (const url of candidates) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        try {
+          const res = await fetch(url, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body,
+            signal: controller.signal,
+          });
+          clearTimeout(timeout);
+
+          if (!res.ok) {
+            if (isRetriableStatus(res.status)) {
+              lastError = new Error(`HTTP ${res.status} from ${url}`);
+              continue;
+            }
+            throw new Error(`HTTP ${res.status} from ${url}`);
+          }
+
+          const json = await res.json();
+          if (json.error) {
+            const code = json.error?.code;
+            if (code === -32016 || code === -32005 || code === -32603) {
+              lastError = new Error(`RPC error ${code} from ${url}`);
+              continue;
+            }
+            throw new Error(json.error?.message || "RPC error");
+          }
+
+          return json.result;
+        } catch (err: any) {
+          clearTimeout(timeout);
+          lastError = err;
+          // Try next candidate
+          continue;
+        }
+      }
+
+      throw lastError || new Error(`All RPC candidates failed for chain ${chainId}`);
+    },
+  });
+}
 
 export const config = createConfig({
   chains: [base, polygon, arbitrum, arbitrumSepolia, optimism, mainnet, bsc],
@@ -35,14 +89,13 @@ export const config = createConfig({
     ] : []),
   ],
   transports: {
-    // Base: Use env var if set, otherwise use official Base RPC (more reliable than dRPC)
-    [base.id]: http(process.env.NEXT_PUBLIC_BASE_RPC_URL || "https://mainnet.base.org"),
-    [polygon.id]: http(process.env.NEXT_PUBLIC_POLYGON_RPC_URL || DRPC_URLS.polygon),
-    [arbitrum.id]: http(process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || DRPC_URLS.arbitrum),
-    [arbitrumSepolia.id]: http(process.env.NEXT_PUBLIC_ARBITRUM_SEPOLIA_RPC_URL || DRPC_URLS.arbitrumSepolia),
-    [optimism.id]: http(process.env.NEXT_PUBLIC_OPTIMISM_RPC_URL || DRPC_URLS.optimism),
-    [mainnet.id]: http(process.env.NEXT_PUBLIC_MAINNET_RPC_URL || DRPC_URLS.mainnet),
-    [bsc.id]: http(process.env.NEXT_PUBLIC_BSC_RPC_URL || DRPC_URLS.bsc),
+    [base.id]: fallbackTransport(base.id),
+    [polygon.id]: fallbackTransport(polygon.id),
+    [arbitrum.id]: fallbackTransport(arbitrum.id),
+    [arbitrumSepolia.id]: fallbackTransport(arbitrumSepolia.id),
+    [optimism.id]: fallbackTransport(optimism.id),
+    [mainnet.id]: fallbackTransport(mainnet.id),
+    [bsc.id]: fallbackTransport(bsc.id),
   },
 });
 

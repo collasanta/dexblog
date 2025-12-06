@@ -17,8 +17,17 @@ import { DexBlogFactoryConfig, CreateBlogResult } from "./types";
  *   signer,
  * });
  *
+ * // First, approve USDC spending (if fee > 0)
  * const setupFee = await factory.getSetupFee();
- * const blogAddress = await factory.createBlog('My Blog', setupFee);
+ * if (setupFee > 0n) {
+ *   const usdcAddress = '0x...'; // USDC address for the chain
+ *   const usdc = new ethers.Contract(usdcAddress, ERC20_ABI, signer);
+ *   await usdc.approve(factory.address, setupFee);
+ * }
+ *
+ * // Then create the blog (no ETH value needed, USDC is transferred via ERC20)
+ * const result = await factory.createBlog('My Blog');
+ * console.log('Blog created at:', result.blogAddress);
  * ```
  */
 export class DexBlogFactory {
@@ -43,13 +52,32 @@ export class DexBlogFactory {
   }
 
   /**
-   * Create a new blog (requires USDC payment)
+   * Create a new blog (requires USDC payment via ERC20 transferFrom/approve)
+   * 
+   * **Important:** This method does NOT accept ETH value. USDC must be approved separately.
+   * Before calling this method, ensure you have:
+   * 1. Approved the factory contract to spend USDC (if setupFee > 0)
+   * 2. Have sufficient USDC balance
+   * 
    * @param name Name for the new blog
-   * @param setupFee Fee to pay for blog creation (get from getSetupFee())
+   * @param overrides Optional transaction overrides (gas settings only - do NOT include value)
    * @returns Object containing the new blog address and transaction receipt
+   * 
+   * @example
+   * ```typescript
+   * // First approve USDC (if fee > 0)
+   * const setupFee = await factory.getSetupFee();
+   * if (setupFee > 0n) {
+   *   const usdc = new ethers.Contract(usdcAddress, ERC20_ABI, signer);
+   *   await usdc.approve(factory.address, setupFee);
+   * }
+   * 
+   * // Then create blog (no ETH value)
+   * const result = await factory.createBlog('My Blog');
+   * ```
    */
-  async createBlog(name: string, setupFee: bigint): Promise<CreateBlogResult> {
-    const tx = await this.contract.createBlog(name, { value: setupFee });
+  async createBlog(name: string, overrides?: ethers.Overrides): Promise<CreateBlogResult> {
+    const tx = await this.contract.createBlog(name, overrides ?? {});
     const receipt = await tx.wait();
 
     // Find BlogCreated event in logs
@@ -83,10 +111,11 @@ export class DexBlogFactory {
   /**
    * Create a new blog as factory owner (free, no payment required)
    * @param name Name for the new blog
+   * @param overrides Optional transaction overrides (gas settings only)
    * @returns Object containing the new blog address and transaction receipt
    */
-  async createBlogAsOwner(name: string): Promise<CreateBlogResult> {
-    const tx = await this.contract.createBlogAsOwner(name);
+  async createBlogAsOwner(name: string, overrides?: ethers.Overrides): Promise<CreateBlogResult> {
+    const tx = await this.contract.createBlogAsOwner(name, overrides ?? {});
     const receipt = await tx.wait();
 
     // Find BlogCreated event in logs

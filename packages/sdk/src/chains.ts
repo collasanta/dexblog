@@ -14,6 +14,10 @@ export interface DexBlogChainConfig {
   rpcUrl: string;
   /** Block explorer URL */
   blockExplorer: string;
+  /** USDC token address */
+  usdcAddress: string;
+  /** USDC decimals (6 on most chains, 18 on BSC) */
+  usdcDecimals: number;
 }
 
 /**
@@ -31,17 +35,43 @@ export const FACTORY_ADDRESSES: Record<number, string> = {
 };
 
 /**
+ * USDC token addresses per chain
+ */
+export const USDC_ADDRESSES: Record<number, string> = {
+  1: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", // Ethereum Mainnet
+  10: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", // Optimism
+  56: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", // BNB Smart Chain (18 decimals)
+  137: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // Polygon
+  8453: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // Base
+  42161: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", // Arbitrum
+  421614: "0x75faf114eafb1BDbe2F0316DF893fd58cE87D3E1", // Arbitrum Sepolia
+};
+
+/**
+ * USDC decimals per chain (6 for most, 18 for BSC)
+ */
+export const USDC_DECIMALS: Record<number, number> = {
+  1: 6,
+  10: 6,
+  56: 18,
+  137: 6,
+  8453: 6,
+  42161: 6,
+  421614: 6,
+};
+
+/**
  * Default RPC URLs per chain
- * Uses public RPC endpoints - users can override with their own
+ * Uses official/public RPC endpoints - users can override with their own
  */
 export const DEFAULT_RPC_URLS: Record<number, string> = {
-  1: "https://eth.drpc.org",
-  10: "https://optimism.drpc.org",
-  56: "https://bsc.drpc.org",
-  137: "https://polygon.drpc.org",
-  8453: "https://base.drpc.org",
-  42161: "https://arbitrum.drpc.org",
-  421614: "https://arbitrum-sepolia.drpc.org",
+  1: "https://ethereum.publicnode.com",
+  10: "https://mainnet.optimism.io",
+  56: "https://bsc-dataseed1.binance.org",
+  137: "https://polygon-rpc.com",
+  8453: "https://mainnet.base.org",
+  42161: "https://arb1.arbitrum.io/rpc",
+  421614: "https://sepolia-rollup.arbitrum.io/rpc",
 };
 
 /**
@@ -80,8 +110,10 @@ export function getChainConfig(chainId: number): DexBlogChainConfig | null {
   const rpcUrl = DEFAULT_RPC_URLS[chainId];
   const blockExplorer = BLOCK_EXPLORERS[chainId];
   const name = CHAIN_NAMES[chainId];
+  const usdcAddress = USDC_ADDRESSES[chainId];
+  const usdcDecimals = USDC_DECIMALS[chainId];
 
-  if (!factoryAddress || !rpcUrl || !blockExplorer || !name) {
+  if (!factoryAddress || !rpcUrl || !blockExplorer || !name || !usdcAddress || usdcDecimals === undefined) {
     return null;
   }
 
@@ -91,6 +123,8 @@ export function getChainConfig(chainId: number): DexBlogChainConfig | null {
     factoryAddress,
     rpcUrl,
     blockExplorer,
+    usdcAddress,
+    usdcDecimals,
   };
 }
 
@@ -110,6 +144,25 @@ export function getFactoryAddress(chainId: number): string | null {
  */
 export function getDefaultRpcUrl(chainId: number): string | null {
   return DEFAULT_RPC_URLS[chainId] || null;
+}
+
+/**
+ * Get USDC address for a chain
+ * @param chainId Chain ID
+ * @returns USDC address or null if not supported
+ */
+export function getUsdcAddress(chainId: number): string | null {
+  return USDC_ADDRESSES[chainId] || null;
+}
+
+/**
+ * Get USDC decimals for a chain
+ * @param chainId Chain ID
+ * @returns USDC decimals or null if not supported
+ */
+export function getUsdcDecimals(chainId: number): number | null {
+  const decimals = USDC_DECIMALS[chainId];
+  return decimals === undefined ? null : decimals;
 }
 
 /**

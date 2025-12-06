@@ -141,8 +141,18 @@ const factory = new DexBlogFactory({
   chainId: 8453,
   signer,
 });
+
+// First, approve USDC spending (if fee > 0)
 const setupFee = await factory.getSetupFee();
-const { blogAddress } = await factory.createBlog('My Blog', setupFee);
+if (setupFee > 0n) {
+  const usdcAddress = '0x...'; // USDC address for Base
+  const usdcAbi = ['function approve(address spender, uint256 amount) external returns (bool)'];
+  const usdc = new ethers.Contract(usdcAddress, usdcAbi, signer);
+  await usdc.approve(factory.address, setupFee);
+}
+
+// Then create blog (no ETH value needed - USDC is transferred via ERC20)
+const { blogAddress } = await factory.createBlog('My Blog');
 ```
 
 ## Deployment

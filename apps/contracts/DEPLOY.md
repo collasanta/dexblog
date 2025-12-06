@@ -18,14 +18,14 @@ export PRIVATE_KEY=your_private_key_here_without_0x
 ```bash
 cd apps/contracts
 
-# Deploy with default $50 setup fee (0.02 ETH)
+# Deploy with default $50 setup fee (10 USDC with 6 decimals = 10000000)
 forge script script/Deploy.s.sol:DeployScript --rpc-url base --broadcast
 
 # Or deploy with FREE blog creation
 forge script script/Deploy.s.sol:DeployFreeFactoryScript --rpc-url base --broadcast
 
-# Or deploy with custom fee (in wei)
-SETUP_FEE=10000000000000000 forge script script/Deploy.s.sol:DeployWithCustomFeeScript --rpc-url base --broadcast
+# Or deploy with custom fee (in USDC units, e.g., 5 USDC = 5000000)
+SETUP_FEE=5000000 forge script script/Deploy.s.sol:DeployWithCustomFeeScript --rpc-url base --broadcast
 ```
 
 ### 3. Verify on BaseScan (optional but recommended)
@@ -33,7 +33,7 @@ SETUP_FEE=10000000000000000 forge script script/Deploy.s.sol:DeployWithCustomFee
 ```bash
 forge verify-contract <DEPLOYED_ADDRESS> src/BlogFactory.sol:BlogFactory \
   --chain base \
-  --constructor-args $(cast abi-encode "constructor(uint256)" 20000000000000000) \
+  --constructor-args $(cast abi-encode "constructor(address,uint256)" <USDC_ADDRESS> 10000000) \
   --etherscan-api-key $BASESCAN_API_KEY
 ```
 
@@ -73,11 +73,13 @@ cast call <FACTORY_ADDRESS> "totalBlogs()" --rpc-url base
 
 ## Setup Fee Options
 
-| Fee | ETH | USD (approx) | Use Case |
-|-----|-----|--------------|----------|
+| Fee | USDC | USD (approx) | Use Case |
+|-----|------|---------------|----------|
 | Free | 0 | $0 | Testing, community building |
-| Low | 0.001 | ~$2.50 | Spam prevention |
-| Standard | 0.02 | ~$50 | Monetization |
+| Low | 5 | ~$5 | Spam prevention |
+| Standard | 10 | ~$10 | Monetization |
+
+**Note:** Fees are in USDC (6 decimals). The factory contract uses USDC as the payment token, not ETH. Users must approve USDC spending before creating blogs.
 
 ## Gas Costs
 

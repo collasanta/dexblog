@@ -5,7 +5,8 @@ import { Header } from "@/components/Header";
 import { GlassCard } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useUserBlogs } from "@/hooks/useUserBlogs";
-import { useAccount } from "wagmi";
+import { useAccount, useChainId } from "wagmi";
+import { getChainName } from "@/lib/chains";
 import {
   Loader2,
   PenLine,
@@ -18,6 +19,8 @@ import {
 export default function DashboardPage() {
   const { isConnected } = useAccount();
   const { blogs, isLoading, blogCount } = useUserBlogs();
+  const chainId = useChainId();
+  const chainName = getChainName(chainId);
 
   return (
     <main className="min-h-screen gradient-bg">
@@ -28,7 +31,7 @@ export default function DashboardPage() {
           <div>
             <h1 className="text-3xl font-bold mb-2">Your Blogs</h1>
             <p className="text-muted-foreground">
-              Manage your decentralized blogs
+              Manage your DexBlogs on {chainName}
             </p>
           </div>
           <Link href="/">

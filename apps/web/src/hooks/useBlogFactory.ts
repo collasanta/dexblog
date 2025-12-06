@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  useReadContract,
   useWriteContract,
   useChainId,
   useAccount,
@@ -10,7 +9,6 @@ import {
 } from "wagmi";
 import {
   getFactoryAddress,
-  FACTORY_ABI,
   getUSDCAddress,
   USDC_DECIMALS,
   ERC20_ABI,
@@ -19,6 +17,7 @@ import { useState, useEffect } from "react";
 import { parseUnits, formatUnits, decodeEventLog, getAddress } from "viem";
 import { useQueryClient } from "@tanstack/react-query";
 import { useUSDCBalance } from "./useUSDCBalance";
+import { DexBlogFactory, getRpcUrlWithFallback } from "dex-blog-sdk";
 
 export function useBlogFactory() {
   const chainId = useChainId();
@@ -35,37 +34,13 @@ export function useBlogFactory() {
   // Use shared USDC balance hook
   const { usdcBalance } = useUSDCBalance();
 
-  const { data: setupFee, isLoading: isLoadingFee } = useReadContract({
-    address: factoryAddress || undefined,
-    abi: FACTORY_ABI,
-    functionName: "setupFee",
-    query: {
-      enabled: !!factoryAddress,
-      staleTime: Infinity, // Factory fee never changes
-    },
-  });
+  const [setupFee, setSetupFee] = useState<bigint | null>(null);
+  const [totalBlogs, setTotalBlogs] = useState<bigint | null>(null);
+  const [factoryOwner, setFactoryOwner] = useState<string | null>(null);
+  const [isLoadingFee, setIsLoadingFee] = useState(false);
+  const [isLoadingTotal, setIsLoadingTotal] = useState(false);
 
-  const { data: totalBlogs, isLoading: isLoadingTotal } = useReadContract({
-    address: factoryAddress || undefined,
-    abi: FACTORY_ABI,
-    functionName: "totalBlogs",
-    query: {
-      enabled: !!factoryAddress,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    },
-  });
-
-  const { data: factoryOwner } = useReadContract({
-    address: factoryAddress || undefined,
-    abi: FACTORY_ABI,
-    functionName: "factoryOwner",
-    query: {
-      enabled: !!factoryAddress,
-      staleTime: Infinity, // Factory owner never changes
-    },
-  });
-
-  const isFactoryOwner = address && factoryOwner && address.toLowerCase() === (factoryOwner as string).toLowerCase();
+  const isFactoryOwner = address && factoryOwner && address.toLowerCase() === factoryOwner.toLowerCase();
 
   const { data: allowance } = useReadContract({
     address: usdcAddress || undefined,
@@ -114,6 +89,37 @@ export function useBlogFactory() {
 
     estimateGasCost();
   }, [publicClient, address, estimatedGas]);
+
+  useEffect(() => {
+    const loadFactoryData = async () => {
+      if (!factoryAddress || !chainId) return;
+      try {
+        setIsLoadingFee(true);
+        setIsLoadingTotal(true);
+        const { provider } = await getRpcUrlWithFallback(chainId, { timeoutMs: 8000 });
+        const factory = new DexBlogFactory({
+          address: factoryAddress,
+          chainId,
+          provider,
+        });
+        const [fee, total, owner] = await Promise.all([
+          factory.getSetupFee(),
+          factory.totalBlogs().then((n) => BigInt(n)),
+          factory.getFactoryOwner(),
+        ]);
+        setSetupFee(fee);
+        setTotalBlogs(total);
+        setFactoryOwner(owner);
+      } catch (e) {
+        console.error("Failed to load factory data via SDK fallback:", e);
+      } finally {
+        setIsLoadingFee(false);
+        setIsLoadingTotal(false);
+      }
+    };
+
+    loadFactoryData();
+  }, [factoryAddress, chainId]);
 
   const createBlog = async (name: string): Promise<{ blogAddress: string; txHash: string } | null> => {
     if (!factoryAddress) {

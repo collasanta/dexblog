@@ -1,43 +1,56 @@
 import { ethers } from "hardhat";
 import * as dotenv from "dotenv";
+import {
+  getChainConfig,
+  getFactoryAddress,
+  getSupportedChainIds,
+  getUsdcDecimals,
+  getRpcUrlWithFallback,
+} from "dex-blog-sdk";
 
 dotenv.config();
-
-const FACTORY_ADDRESSES: Record<string, string> = {
-  arbitrum: "0x243924EEE57aa31832A957c11416AB34f5009a67",
-  arbitrumSepolia: "0xccb9EFF798D12D78d179c81aEC83c9E9F974013B",
-  base: "0x8Ccc0Bb6AF35F9067A7110Ac50666159e399A5F3",
-  optimism: "0x96e8005727eCAd421B4cdded7B08d240f522D96E",
-  bsc: "0x96e8005727eCAd421B4cdded7B08d240f522D96E",
-};
-
-const USDC_DECIMALS: Record<string, number> = {
-  arbitrum: 6,
-  arbitrumSepolia: 6,
-  base: 6,
-  optimism: 6,
-  bsc: 18,
-};
-
-const RPC_URLS: Record<string, string> = {
-  arbitrum: process.env.ARBITRUM_RPC_URL || "https://arb1.arbitrum.io/rpc", // Official Arbitrum RPC
-  arbitrumSepolia: process.env.ARBITRUM_SEPOLIA_RPC_URL || "https://sepolia-rollup.arbitrum.io/rpc",
-  base: process.env.BASE_RPC_URL || "https://mainnet.base.org",
-  optimism: process.env.OPTIMISM_RPC_URL || "https://mainnet.optimism.io",
-  bsc: process.env.BSC_RPC_URL || "https://bsc-dataseed1.binance.org", // Official BSC RPC
-};
 
 async function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function queryFactoryFee(network: string, factoryAddress: string, rpcUrl: string, retries = 3) {
+async function queryFactoryFee(chainId: number, retries = 3) {
+  const factoryAddress = getFactoryAddress(chainId);
+  const usdcDecimals = getUsdcDecimals(chainId) || 6;
+  const chainConfig = getChainConfig(chainId);
+  const networkLabel = chainConfig?.name || `chain-${chainId}`;
+
+  if (!factoryAddress) {
+    return {
+      network: networkLabel,
+      factoryAddress: factoryAddress || "N/A",
+      setupFee: "N/A",
+      owner: "N/A",
+      totalBlogs: "N/A",
+      error: "Missing factory address",
+    };
+  }
+
+  const envUrls: Record<number, string | undefined> = {
+    42161: process.env.ARBITRUM_RPC_URL,
+    421614: process.env.ARBITRUM_SEPOLIA_RPC_URL,
+    8453: process.env.BASE_RPC_URL,
+    10: process.env.OPTIMISM_RPC_URL,
+    56: process.env.BSC_RPC_URL,
+    137: process.env.POLYGON_RPC_URL,
+    1: process.env.MAINNET_RPC_URL,
+  };
+
+  const rpc = await getRpcUrlWithFallback(chainId, {
+    envRpcUrl: envUrls[chainId],
+    timeoutMs: 8000,
+  });
+
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      console.log(`[${network}] Attempting to query (attempt ${attempt}/${retries})...`);
+      console.log(`[${networkLabel}] Attempting to query (attempt ${attempt}/${retries})...`);
       
-      // Create provider
-      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      const provider = rpc.provider;
       
       const BlogFactory = await ethers.getContractFactory("BlogFactory");
       const factory = BlogFactory.attach(factoryAddress).connect(provider);
@@ -62,22 +75,21 @@ async function queryFactoryFee(network: string, factoryAddress: string, rpcUrl: 
         15000
       );
       
-      const usdcDecimals = USDC_DECIMALS[network] || 6;
       const feeFormatted = ethers.formatUnits(setupFee, usdcDecimals);
-      console.log(`[${network}] ✅ Success!`);
-      return { network, factoryAddress, setupFee: feeFormatted, owner, totalBlogs: totalBlogs.toString(), error: null };
+      console.log(`[${networkLabel}] ✅ Success!`);
+      return { network: networkLabel, factoryAddress, setupFee: feeFormatted, owner, totalBlogs: totalBlogs.toString(), error: null };
     } catch (error: any) {
       const errorMsg = error.message || error.toString() || "Unknown error";
-      console.log(`[${network}] ❌ Attempt ${attempt} failed: ${errorMsg.substring(0, 60)}`);
+      console.log(`[${networkLabel}] ❌ Attempt ${attempt} failed: ${errorMsg.substring(0, 60)}`);
       
       if (attempt < retries) {
         const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Exponential backoff, max 5s
-        console.log(`[${network}] Retrying in ${delay}ms...`);
+        console.log(`[${networkLabel}] Retrying in ${delay}ms...`);
         await sleep(delay);
       } else {
         // Last attempt failed
         return { 
-          network, 
+          network: networkLabel, 
           factoryAddress, 
           setupFee: "N/A", 
           owner: "N/A", 
@@ -94,19 +106,19 @@ async function queryFactoryFee(network: string, factoryAddress: string, rpcUrl: 
 
 async function main() {
   console.log("Querying setup fees for all deployed factories...\n");
-  console.log(`Testing ${Object.keys(FACTORY_ADDRESSES).length} networks...\n`);
+  const chainIds = getSupportedChainIds();
+  console.log(`Testing ${chainIds.length} networks...\n`);
   
   // Process sequentially to avoid overwhelming RPC endpoints
   const results = [];
-  const entries = Object.entries(FACTORY_ADDRESSES);
   
-  for (let i = 0; i < entries.length; i++) {
-    const [network, address] = entries[i];
-    const result = await queryFactoryFee(network, address, RPC_URLS[network]);
+  for (let i = 0; i < chainIds.length; i++) {
+    const chainId = chainIds[i];
+    const result = await queryFactoryFee(chainId);
     results.push(result);
     
     // Add a small delay between networks (except for the last one)
-    if (i < entries.length - 1) {
+    if (i < chainIds.length - 1) {
       await sleep(500);
     }
   }

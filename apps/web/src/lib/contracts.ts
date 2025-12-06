@@ -1,30 +1,37 @@
 import { base, polygon, arbitrum, arbitrumSepolia, optimism, mainnet, bsc } from "wagmi/chains";
+import {
+  FACTORY_ADDRESSES as SDK_FACTORY_ADDRESSES,
+  USDC_ADDRESSES as SDK_USDC_ADDRESSES,
+  USDC_DECIMALS as SDK_USDC_DECIMALS,
+  getFactoryAddress as sdkGetFactoryAddress,
+  getUsdcAddress as sdkGetUsdcAddress,
+} from "dex-blog-sdk";
 
 // Factory contract addresses per chain
 // Update these after deploying to each chain
 export const FACTORY_ADDRESSES: Record<number, `0x${string}`> = {
-  [base.id]: "0x8Ccc0Bb6AF35F9067A7110Ac50666159e399A5F3", // ✅ Deployed on Base Mainnet
-  [polygon.id]: "0x0000000000000000000000000000000000000000",
-  [arbitrum.id]: "0x243924EEE57aa31832A957c11416AB34f5009a67", // ✅ Deployed on Arbitrum Mainnet (with ArbSys L2 blockNumber fix)
-  [arbitrumSepolia.id]: "0xccb9EFF798D12D78d179c81aEC83c9E9F974013B", // ✅ Deployed on Arbitrum Sepolia (with ArbSys L2 blockNumber fix, no try-catch)
-  [optimism.id]: "0x96e8005727eCAd421B4cdded7B08d240f522D96E", // ✅ Deployed on Optimism Mainnet
-  [mainnet.id]: "0x0000000000000000000000000000000000000000",
-  [bsc.id]: "0x96e8005727eCAd421B4cdded7B08d240f522D96E", // ✅ Deployed on BNB Chain
+  [base.id]: SDK_FACTORY_ADDRESSES[base.id] as `0x${string}`,
+  [polygon.id]: SDK_FACTORY_ADDRESSES[polygon.id] as `0x${string}`,
+  [arbitrum.id]: SDK_FACTORY_ADDRESSES[arbitrum.id] as `0x${string}`,
+  [arbitrumSepolia.id]: SDK_FACTORY_ADDRESSES[arbitrumSepolia.id] as `0x${string}`,
+  [optimism.id]: SDK_FACTORY_ADDRESSES[optimism.id] as `0x${string}`,
+  [mainnet.id]: SDK_FACTORY_ADDRESSES[mainnet.id] as `0x${string}`,
+  [bsc.id]: SDK_FACTORY_ADDRESSES[bsc.id] as `0x${string}`,
 };
 
 // USDC addresses per chain (6 decimals for most, 18 for BSC)
 export const USDC_ADDRESSES: Record<number, `0x${string}`> = {
-  [base.id]: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-  [polygon.id]: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
-  [arbitrum.id]: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
-  [arbitrumSepolia.id]: "0x75faf114eafb1BDbe2F0316DF893fd58cE87D3E1", // Arbitrum Sepolia USDC
-  [optimism.id]: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
-  [mainnet.id]: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-  [bsc.id]: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", // USDC on BSC uses 18 decimals
+  [base.id]: SDK_USDC_ADDRESSES[base.id] as `0x${string}`,
+  [polygon.id]: SDK_USDC_ADDRESSES[polygon.id] as `0x${string}`,
+  [arbitrum.id]: SDK_USDC_ADDRESSES[arbitrum.id] as `0x${string}`,
+  [arbitrumSepolia.id]: SDK_USDC_ADDRESSES[arbitrumSepolia.id] as `0x${string}`,
+  [optimism.id]: SDK_USDC_ADDRESSES[optimism.id] as `0x${string}`,
+  [mainnet.id]: SDK_USDC_ADDRESSES[mainnet.id] as `0x${string}`,
+  [bsc.id]: SDK_USDC_ADDRESSES[bsc.id] as `0x${string}`,
 };
 
 export function getUSDCAddress(chainId: number): `0x${string}` | null {
-  const address = USDC_ADDRESSES[chainId];
+  const address = sdkGetUsdcAddress(chainId) as `0x${string}` | null;
   if (!address) return null;
   
   // Ensure checksum format for wagmi/viem compatibility
@@ -38,17 +45,18 @@ export function getUSDCAddress(chainId: number): `0x${string}` | null {
 
 // USDC decimals per chain
 export const USDC_DECIMALS: Record<number, number> = {
-  [base.id]: 6,
-  [polygon.id]: 6,
-  [arbitrum.id]: 6,
-  [arbitrumSepolia.id]: 6,
-  [optimism.id]: 6,
-  [mainnet.id]: 6,
-  [bsc.id]: 18, // BSC USDC uses 18 decimals
+  [base.id]: SDK_USDC_DECIMALS[base.id],
+  [polygon.id]: SDK_USDC_DECIMALS[polygon.id],
+  [arbitrum.id]: SDK_USDC_DECIMALS[arbitrum.id],
+  [arbitrumSepolia.id]: SDK_USDC_DECIMALS[arbitrumSepolia.id],
+  [optimism.id]: SDK_USDC_DECIMALS[optimism.id],
+  [mainnet.id]: SDK_USDC_DECIMALS[mainnet.id],
+  [bsc.id]: SDK_USDC_DECIMALS[bsc.id],
 };
 
 export function getFactoryAddress(chainId: number): `0x${string}` | null {
-  return FACTORY_ADDRESSES[chainId] || null;
+  const addr = sdkGetFactoryAddress(chainId) as `0x${string}` | null;
+  return addr || null;
 }
 
 export function isChainSupported(chainId: number): boolean {
