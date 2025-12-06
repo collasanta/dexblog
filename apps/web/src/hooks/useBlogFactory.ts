@@ -17,12 +17,14 @@ import {
 } from "@/lib/contracts";
 import { useState, useEffect } from "react";
 import { parseUnits, formatUnits, decodeEventLog, getAddress } from "viem";
-import { useQuery } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { useUSDCBalance } from "./useUSDCBalance";
 
 export function useBlogFactory() {
   const chainId = useChainId();
   const { address } = useAccount();
   const publicClient = usePublicClient();
+  const queryClient = useQueryClient();
   const factoryAddressRaw = getFactoryAddress(chainId);
   const factoryAddress = factoryAddressRaw ? (getAddress(factoryAddressRaw) as `0x${string}`) : null;
   const usdcAddressRaw = getUSDCAddress(chainId);
@@ -30,12 +32,16 @@ export function useBlogFactory() {
   const [isCreating, setIsCreating] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
 
+  // Use shared USDC balance hook
+  const { usdcBalance } = useUSDCBalance();
+
   const { data: setupFee, isLoading: isLoadingFee } = useReadContract({
     address: factoryAddress || undefined,
     abi: FACTORY_ABI,
     functionName: "setupFee",
     query: {
       enabled: !!factoryAddress,
+      staleTime: Infinity, // Factory fee never changes
     },
   });
 
@@ -45,6 +51,7 @@ export function useBlogFactory() {
     functionName: "totalBlogs",
     query: {
       enabled: !!factoryAddress,
+      staleTime: 5 * 60 * 1000, // 5 minutes
     },
   });
 
@@ -54,6 +61,7 @@ export function useBlogFactory() {
     functionName: "factoryOwner",
     query: {
       enabled: !!factoryAddress,
+      staleTime: Infinity, // Factory owner never changes
     },
   });
 
@@ -66,68 +74,10 @@ export function useBlogFactory() {
     args: address && factoryAddress ? [address, factoryAddress] : undefined,
     query: {
       enabled: !!usdcAddress && !!address && !!factoryAddress,
-      refetchInterval: 2000, // Refetch every 2 seconds to check allowance updates
+      staleTime: 10 * 1000, // 10 seconds
+      refetchInterval: false, // No polling - invalidate after approve tx
     },
   });
-
-  // Skip USDC balance query on Arbitrum Sepolia (testnet with 0 factory fee)
-  const isArbitrumSepolia = chainId === 421614;
-  
-  // Fetch USDC balance using publicClient directly (works better with proxy contracts)
-  const { data: usdcBalance, error: usdcBalanceError } = useQuery({
-    queryKey: ["usdc-balance-factory", usdcAddress, address, chainId],
-    queryFn: async () => {
-      if (!publicClient || !usdcAddress || !address) return null;
-      
-      try {
-        // First, check if contract exists by getting its bytecode
-        const code = await publicClient.getBytecode({ address: usdcAddress });
-        if (!code || code === "0x") {
-          console.warn("[useBlogFactory] USDC contract does not exist at address:", usdcAddress);
-          console.warn("[useBlogFactory] This might be a testnet issue. Returning 0n.");
-          return 0n;
-        }
-        
-        const balance = await publicClient.readContract({
-          address: usdcAddress,
-          abi: ERC20_ABI,
-          functionName: "balanceOf",
-          args: [address as `0x${string}`],
-        });
-        return balance as bigint;
-      } catch (error: any) {
-        // Check if it's a "no data" error (contract doesn't exist or doesn't have the function)
-        if (error?.shortMessage?.includes("returned no data") || 
-            error?.cause?.shortMessage?.includes("returned no data")) {
-          console.warn("[useBlogFactory] USDC contract may not exist or may not have balanceOf function at:", usdcAddress);
-          console.warn("[useBlogFactory] This is common on testnets. Returning 0n.");
-          return 0n;
-        }
-        
-        console.error("[useBlogFactory] Error reading USDC balance:", error);
-        // Return 0n instead of throwing to prevent UI breakage
-        return 0n;
-      }
-    },
-    enabled: !!publicClient && !!usdcAddress && !!address && !isArbitrumSepolia,
-    refetchInterval: 5000, // Refetch every 5 seconds
-  });
-
-  // Debug logging
-  useEffect(() => {
-    if (usdcBalanceError) {
-      console.error("[useBlogFactory] Error fetching USDC balance:", usdcBalanceError);
-    }
-    if (usdcAddress && address) {
-      console.log("[useBlogFactory] USDC balance:", {
-        chainId,
-        usdcAddress,
-        userAddress: address,
-        balance: usdcBalance?.toString(),
-        error: usdcBalanceError,
-      });
-    }
-  }, [usdcAddress, address, usdcBalance, usdcBalanceError, chainId, publicClient]);
 
   // Check native ETH balance for gas
   const { data: nativeBalance } = useBalance({
@@ -137,10 +87,6 @@ export function useBlogFactory() {
   const { writeContractAsync } = useWriteContract();
   
   // Use fixed gas estimate instead of calculating every time
-  // Approximate gas costs based on typical values:
-  // - createBlog: ~600k gas
-  // - createBlogAsOwner: ~500k gas (no USDC transfer)
-  // We'll use a conservative estimate
   const estimatedGas = isFactoryOwner ? 500000n : 600000n;
   
   // Get current gas price and calculate estimated cost
@@ -160,7 +106,6 @@ export function useBlogFactory() {
       } catch (error) {
         console.error("Failed to estimate gas cost:", error);
         // Use a fallback estimate if we can't get gas price
-        // Assume 0.0001 ETH as fallback
         setEstimatedGasCost(parseUnits("0.0001", 18));
       } finally {
         setIsEstimatingGas(false);
@@ -204,16 +149,15 @@ export function useBlogFactory() {
           abi: FACTORY_ABI,
           functionName: "createBlogAsOwner",
           args: [name],
-          gas: 2000000n, // Increase gas limit for contract creation (test showed ~1.6M gas used)
+          gas: 2000000n,
         });
 
         console.log("Transaction hash:", hash);
         
-        // Wait for transaction receipt with extended timeout for Base
         const receipt = await publicClient.waitForTransactionReceipt({ 
           hash,
-          timeout: 120000, // 2 minutes timeout for Base
-          pollingInterval: 2000, // Poll every 2 seconds
+          timeout: 120000,
+          pollingInterval: 2000,
         });
         
         if (receipt.status !== "success") {
@@ -223,7 +167,6 @@ export function useBlogFactory() {
         // Extract blog address from BlogCreated event
         const blogCreatedEvent = receipt.logs.find((log) => {
           try {
-            // Try to decode the event
             const decoded = decodeEventLog({
               abi: FACTORY_ABI,
               data: log.data,
@@ -243,10 +186,14 @@ export function useBlogFactory() {
           });
           const blogAddress = (decoded.args as any).blogAddress;
           console.log("Blog created at address:", blogAddress);
+          
+          // Invalidate relevant queries after successful blog creation
+          queryClient.invalidateQueries({ queryKey: ["userBlogs"] });
+          queryClient.invalidateQueries({ queryKey: ["usdc-balance"] });
+          
           return { blogAddress: blogAddress as string, txHash: hash };
         }
 
-        // Fallback: if we can't find the event, return null
         console.warn("Could not find BlogCreated event in receipt");
         return null;
       } catch (error) {
@@ -267,7 +214,6 @@ export function useBlogFactory() {
     
     // If fee is 0, skip balance check and approval
     if (fee === 0n) {
-      // Skip approval and balance checks when fee is 0
       try {
         setIsCreating(true);
         const hash = await writeContractAsync({
@@ -307,6 +253,10 @@ export function useBlogFactory() {
           });
           const blogAddress = (decoded.args as any).blogAddress;
           console.log("Blog created at address:", blogAddress);
+          
+          // Invalidate relevant queries
+          queryClient.invalidateQueries({ queryKey: ["userBlogs"] });
+          
           return { blogAddress: blogAddress as string, txHash: hash };
         }
 
@@ -359,6 +309,9 @@ export function useBlogFactory() {
             throw new Error("Approval transaction failed");
           }
           
+          // Invalidate allowance query after approval
+          queryClient.invalidateQueries({ queryKey: ["allowance"] });
+          
           setIsApproving(false);
           
           // Small delay to ensure allowance is updated on-chain
@@ -376,7 +329,7 @@ export function useBlogFactory() {
         abi: FACTORY_ABI,
         functionName: "createBlog",
         args: [name],
-        gas: 2000000n, // Increase gas limit for contract creation (test showed ~1.6M gas used)
+        gas: 2000000n,
       });
 
       console.log("Transaction hash:", hash);
@@ -391,7 +344,6 @@ export function useBlogFactory() {
       // Extract blog address from BlogCreated event
       const blogCreatedEvent = receipt.logs.find((log) => {
         try {
-          // Try to decode the event
           const decoded = decodeEventLog({
             abi: FACTORY_ABI,
             data: log.data,
@@ -411,10 +363,14 @@ export function useBlogFactory() {
         });
           const blogAddress = (decoded.args as any).blogAddress;
           console.log("Blog created at address:", blogAddress);
+          
+          // Invalidate relevant queries after successful blog creation
+          queryClient.invalidateQueries({ queryKey: ["userBlogs"] });
+          queryClient.invalidateQueries({ queryKey: ["usdc-balance"] });
+          
           return { blogAddress: blogAddress as string, txHash: hash };
       }
 
-      // Fallback: if we can't find the event, return null
       console.warn("Could not find BlogCreated event in receipt");
       return null;
     } catch (error) {
@@ -428,7 +384,7 @@ export function useBlogFactory() {
 
   const hasEnoughNativeBalance = nativeBalance && estimatedGasCost 
     ? nativeBalance.value >= estimatedGasCost 
-    : true; // Default to true if we can't estimate
+    : true;
 
   return {
     factoryAddress,
@@ -443,7 +399,7 @@ export function useBlogFactory() {
     isEstimatingGas,
     hasEnoughNativeBalance,
     needsApproval: setupFee && setupFee > 0n && allowance ? allowance < setupFee : false,
-    hasEnoughBalance: setupFee && setupFee > 0n && usdcBalance ? usdcBalance >= setupFee : true, // true when fee is 0
+    hasEnoughBalance: setupFee && setupFee > 0n && usdcBalance ? usdcBalance >= setupFee : true,
     isFactoryOwner: isFactoryOwner || false,
     isLoadingFee,
     isLoadingTotal,

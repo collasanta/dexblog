@@ -1,12 +1,8 @@
 "use client";
 
-import { useAccount, useChainId, useReadContract } from "wagmi";
+import { useAccount, useChainId, useReadContract, usePublicClient } from "wagmi";
 import { getFactoryAddress, FACTORY_ABI, BLOG_ABI } from "@/lib/contracts";
 import { useQuery } from "@tanstack/react-query";
-import { createPublicClient, http } from "viem";
-import { base, polygon, arbitrum, optimism, mainnet, bsc } from "viem/chains";
-
-const chains = { 1: mainnet, 137: polygon, 42161: arbitrum, 10: optimism, 8453: base, 56: bsc };
 
 export interface UserBlog {
   address: string;
@@ -14,10 +10,14 @@ export interface UserBlog {
   postCount: number;
 }
 
+// Helper to add delay between requests
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export function useUserBlogs() {
   const { address: userAddress, isConnected } = useAccount();
   const chainId = useChainId();
   const factoryAddress = getFactoryAddress(chainId);
+  const publicClient = usePublicClient();
 
   const { data: blogAddresses, isLoading: isLoadingAddresses } = useReadContract({
     address: factoryAddress || undefined,
@@ -29,51 +29,47 @@ export function useUserBlogs() {
     },
   });
 
-  // Fetch blog details for each address
+  // Fetch blog details for each address sequentially to avoid rate limits
   const { data: blogs, isLoading: isLoadingBlogs } = useQuery({
     queryKey: ["userBlogs", userAddress, chainId, blogAddresses],
     queryFn: async (): Promise<UserBlog[]> => {
-      if (!blogAddresses || !chainId) return [];
+      if (!blogAddresses || !chainId || !publicClient) return [];
 
-      const chain = chains[chainId as keyof typeof chains];
-      if (!chain) return [];
+      const blogDetails: UserBlog[] = [];
+      
+      // Fetch blogs sequentially with delay to avoid rate limits
+      for (const addr of blogAddresses as string[]) {
+        try {
+          const [name, postCount] = await Promise.all([
+            publicClient.readContract({
+              address: addr as `0x${string}`,
+              abi: BLOG_ABI,
+              functionName: "name",
+            }),
+            publicClient.readContract({
+              address: addr as `0x${string}`,
+              abi: BLOG_ABI,
+              functionName: "postCount",
+            }),
+          ]);
 
-      const client = createPublicClient({
-        chain,
-        transport: http(),
-      });
+          blogDetails.push({
+            address: addr,
+            name: name as string,
+            postCount: Number(postCount),
+          });
+        } catch (error) {
+          console.error(`Failed to fetch blog ${addr}:`, error);
+        }
+        
+        // Add delay between blogs to avoid rate limiting
+        await delay(150);
+      }
 
-      const blogDetails = await Promise.all(
-        (blogAddresses as string[]).map(async (addr) => {
-          try {
-            const [name, postCount] = await Promise.all([
-              client.readContract({
-                address: addr as `0x${string}`,
-                abi: BLOG_ABI,
-                functionName: "name",
-              }),
-              client.readContract({
-                address: addr as `0x${string}`,
-                abi: BLOG_ABI,
-                functionName: "postCount",
-              }),
-            ]);
-
-            return {
-              address: addr,
-              name: name as string,
-              postCount: Number(postCount),
-            };
-          } catch (error) {
-            console.error(`Failed to fetch blog ${addr}:`, error);
-            return null;
-          }
-        })
-      );
-
-      return blogDetails.filter((b): b is UserBlog => b !== null);
+      return blogDetails;
     },
-    enabled: !!blogAddresses && (blogAddresses as string[]).length > 0,
+    enabled: !!blogAddresses && (blogAddresses as string[]).length > 0 && !!publicClient,
+    staleTime: 5 * 60 * 1000, // 5 minutes - blog metadata rarely changes
   });
 
   return {

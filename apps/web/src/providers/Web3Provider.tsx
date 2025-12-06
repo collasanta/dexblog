@@ -12,8 +12,10 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 60 * 1000,
-            retry: 1,
+            staleTime: 2 * 60 * 1000, // 2 minutes default
+            gcTime: 10 * 60 * 1000, // 10 minutes cache (garbage collection)
+            retry: 2, // Retry failed requests twice
+            retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
           },
         },
       })

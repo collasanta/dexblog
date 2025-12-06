@@ -67,13 +67,14 @@ export function useBlog(address: `0x${string}` | undefined) {
       }
 
       try {
+        // Get RPC URL from publicClient's transport
         const DRPC_URLS: Record<number, string> = {
           1: process.env.NEXT_PUBLIC_MAINNET_RPC_URL || "https://eth.drpc.org",
           137: process.env.NEXT_PUBLIC_POLYGON_RPC_URL || "https://polygon.drpc.org",
           42161: process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || "https://arbitrum.drpc.org",
           421614: process.env.NEXT_PUBLIC_ARBITRUM_SEPOLIA_RPC_URL || "https://arbitrum-sepolia.drpc.org",
           10: process.env.NEXT_PUBLIC_OPTIMISM_RPC_URL || "https://optimism.drpc.org",
-          8453: process.env.NEXT_PUBLIC_BASE_RPC_URL || "https://base.drpc.org",
+          8453: process.env.NEXT_PUBLIC_BASE_RPC_URL || "https://mainnet.base.org",
           56: process.env.NEXT_PUBLIC_BSC_RPC_URL || "https://bsc.drpc.org",
         };
 
@@ -107,7 +108,8 @@ export function useBlog(address: `0x${string}` | undefined) {
         return [];
       }
     },
-    refetchInterval: 10000,
+    refetchInterval: 60000, // Reduced from 10s to 60s
+    staleTime: 30 * 1000, // 30 seconds
   });
 
   // Fetch transaction hashes in background with batching (non-blocking, progressive)
@@ -126,7 +128,7 @@ export function useBlog(address: `0x${string}` | undefined) {
           42161: process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || "https://arbitrum.drpc.org",
           421614: process.env.NEXT_PUBLIC_ARBITRUM_SEPOLIA_RPC_URL || "https://arbitrum-sepolia.drpc.org",
           10: process.env.NEXT_PUBLIC_OPTIMISM_RPC_URL || "https://optimism.drpc.org",
-          8453: process.env.NEXT_PUBLIC_BASE_RPC_URL || "https://base.drpc.org",
+          8453: process.env.NEXT_PUBLIC_BASE_RPC_URL || "https://mainnet.base.org",
           56: process.env.NEXT_PUBLIC_BSC_RPC_URL || "https://bsc.drpc.org",
         };
 
@@ -155,7 +157,8 @@ export function useBlog(address: `0x${string}` | undefined) {
         return new Map();
       }
     },
-    refetchInterval: 30000, // Refetch hashes less frequently
+    refetchInterval: 60000, // Match posts refetch interval
+    staleTime: 30 * 1000,
   });
 
   // Merge posts with transaction hashes

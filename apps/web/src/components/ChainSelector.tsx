@@ -17,12 +17,10 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { supportedChains, SupportedChainId } from "@/lib/chains";
-import { useChainId, useSwitchChain, useAccount, usePublicClient } from "wagmi";
-import { getUSDCAddress, USDC_DECIMALS, ERC20_ABI } from "@/lib/contracts";
+import { useChainId, useSwitchChain, useAccount } from "wagmi";
 import { formatUnits } from "@/lib/utils";
-import { getAddress } from "viem";
-import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { useUSDCBalance } from "@/hooks/useUSDCBalance";
 
 interface ChainSelectorProps {
   onChainChange?: (chainId: number) => void;
@@ -81,93 +79,12 @@ export function ChainSelector({
       };
     }
   }, [selectOpen]);
-  const usdcAddressRaw = getUSDCAddress(chainId);
-  const publicClient = usePublicClient();
-  
-  // Ensure checksum address format
-  const usdcAddress = usdcAddressRaw ? (getAddress(usdcAddressRaw) as `0x${string}`) : undefined;
 
-  // Skip USDC balance query on Arbitrum Sepolia (testnet with 0 factory fee)
+  // Use shared USDC balance hook
+  const { usdcBalance, decimals, isLoading: isLoadingBalance } = useUSDCBalance();
+
+  // Skip USDC balance display on Arbitrum Sepolia
   const isArbitrumSepolia = chainId === 421614;
-  
-  // Fetch USDC balance using publicClient directly (works better with proxy contracts)
-  const { data: usdcBalance, isLoading: isLoadingBalance, error: balanceError } = useQuery({
-    queryKey: ["usdc-balance", usdcAddress, address, chainId],
-    queryFn: async () => {
-      if (!publicClient || !usdcAddress || !address) {
-        console.log("[ChainSelector] Query disabled:", { publicClient: !!publicClient, usdcAddress: !!usdcAddress, address: !!address });
-        return null;
-      }
-      
-      console.log("[ChainSelector] Reading USDC balance from contract:", {
-        address: usdcAddress,
-        userAddress: address,
-        chainId,
-      });
-      
-      try {
-        // First, check if contract exists by getting its bytecode
-        const code = await publicClient.getBytecode({ address: usdcAddress });
-        if (!code || code === "0x") {
-          console.warn("[ChainSelector] USDC contract does not exist at address:", usdcAddress);
-          console.warn("[ChainSelector] This might be a testnet issue. Returning 0n.");
-          return 0n;
-        }
-        
-        // Try reading balance
-        const balance = await publicClient.readContract({
-          address: usdcAddress,
-          abi: ERC20_ABI,
-          functionName: "balanceOf",
-          args: [address as `0x${string}`],
-        });
-        
-        const balanceBigInt = typeof balance === 'bigint' ? balance : BigInt(balance.toString());
-        console.log("[ChainSelector] Raw balance from contract:", balanceBigInt.toString());
-        console.log("[ChainSelector] Balance in USDC (6 decimals):", (Number(balanceBigInt) / 1e6).toFixed(6));
-        
-        return balanceBigInt;
-      } catch (error: any) {
-        // Check if it's a "no data" error (contract doesn't exist or doesn't have the function)
-        if (error?.shortMessage?.includes("returned no data") || 
-            error?.cause?.shortMessage?.includes("returned no data")) {
-          console.warn("[ChainSelector] USDC contract may not exist or may not have balanceOf function at:", usdcAddress);
-          console.warn("[ChainSelector] This is common on testnets. Returning 0n.");
-          return 0n;
-        }
-        
-        console.error("[ChainSelector] Error reading USDC balance:", error);
-        console.error("[ChainSelector] Error details:", {
-          message: error?.message,
-          code: error?.code,
-          data: error?.data,
-          cause: error?.cause,
-        });
-        // Don't throw - return 0n instead so UI doesn't break
-        console.warn("[ChainSelector] Returning 0n due to error");
-        return 0n;
-      }
-    },
-    enabled: !!publicClient && !!usdcAddress && !!address && chainId === currentChainId && !isArbitrumSepolia,
-    refetchInterval: 5000, // Refetch every 5 seconds
-  });
-
-  // Debug logging
-  useEffect(() => {
-    if (balanceError) {
-      console.error("[ChainSelector] Error fetching USDC balance:", balanceError);
-    }
-    console.log("[ChainSelector] Balance state:", {
-      chainId,
-      currentChainId,
-      usdcAddress,
-      userAddress: address,
-      balance: usdcBalance?.toString() || "null",
-      isLoading: isLoadingBalance,
-      hasError: !!balanceError,
-      publicClientAvailable: !!publicClient,
-    });
-  }, [usdcAddress, address, usdcBalance, isLoadingBalance, balanceError, chainId, currentChainId, publicClient]);
 
   const handleChange = (value: string) => {
     const newChainId = parseInt(value) as SupportedChainId;
@@ -199,12 +116,7 @@ export function ChainSelector({
       ? usdcBalance !== null && usdcBalance !== undefined
         ? (() => {
             try {
-              const formatted = formatUnits(usdcBalance, USDC_DECIMALS[chainId] || 6);
-              console.log("[ChainSelector] Formatted balance:", {
-                raw: usdcBalance.toString(),
-                formatted,
-                decimals: USDC_DECIMALS[chainId] || 6,
-              });
+              const formatted = formatUnits(usdcBalance, decimals);
               return formatted;
             } catch (e) {
               console.error("[ChainSelector] Error formatting balance:", e);
@@ -222,7 +134,6 @@ export function ChainSelector({
         value={chainId.toString()} 
         onValueChange={handleChange}
         onOpenChange={setSelectOpen}
-        modal={false}
       >
         <SelectTrigger className="w-full">
           <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
