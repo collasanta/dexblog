@@ -35,13 +35,10 @@ export function useUserBlogs() {
     queryFn: async (): Promise<string[]> => {
       if (!factory || !userAddress) return [];
       try {
-        console.log(`[useUserBlogs] Fetching blogs for ${userAddress} on chain ${chainId}`);
         // SDK's ResilientProvider handles retries automatically
         const addresses = await factory.getBlogsByOwner(userAddress);
-        console.log(`[useUserBlogs] Found ${addresses.length} blogs`);
         return addresses;
       } catch (error: any) {
-        console.error(`[useUserBlogs] Failed to fetch blog addresses:`, error);
         throw error;
       }
     },
@@ -50,11 +47,6 @@ export function useUserBlogs() {
     retry: 2,
     retryDelay: 1000,
   });
-
-  // Log errors
-  if (addressesError) {
-    console.error("[useUserBlogs] Error fetching blog addresses:", addressesError);
-  }
 
   const { data: blogs, isLoading: isLoadingBlogs } = useQuery({
     queryKey: ["userBlogs", userAddress, chainId, blogAddresses?.join(",")],
@@ -109,9 +101,12 @@ export function useUserBlogs() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const isReady = !!sdkProvider && !!factory && !!userAddress;
+  const isLoading = !isReady || isLoadingAddresses || isLoadingBlogs;
+
   return {
     blogs: blogs || [],
-    isLoading: isLoadingAddresses || isLoadingBlogs,
+    isLoading,
     blogCount: blogAddresses ? blogAddresses.length : 0,
   };
 }

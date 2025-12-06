@@ -51,14 +51,14 @@ export function useBlog(address: `0x${string}` | undefined) {
       return null;
     }
     return new DexBlog({
-      address,
+      address: address!,
       chainId,
       provider: sdkProvider,
       signer,
     });
   };
 
-  const { data: info } = useQuery({
+  const { data: info, isLoading: isLoadingInfo } = useQuery({
     queryKey: ["blog-info", address, chainId],
     enabled: !!readBlog,
     queryFn: async (): Promise<BlogInfo | undefined> => {
@@ -206,7 +206,9 @@ export function useBlog(address: `0x${string}` | undefined) {
     info,
     posts: posts || [],
     isLoadingPosts,
+    isLoadingInfo,
     isLoadingHashes,
+    hasReadBlog: !!readBlog,
     publish,
     isPublishing,
     editPost,

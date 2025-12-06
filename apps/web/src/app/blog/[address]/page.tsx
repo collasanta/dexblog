@@ -15,44 +15,22 @@ interface BlogPageProps {
 export default function BlogPage({ params }: BlogPageProps) {
   const { address } = params;
   const blogAddress = address as `0x${string}`;
-  const { info, posts, isLoadingPosts, refetchPosts } = useBlog(blogAddress);
+  const { info, posts, isLoadingPosts, isLoadingInfo, hasReadBlog, refetchPosts } = useBlog(blogAddress);
   const [page, setPage] = useState(0);
   const perPage = 10;
-
-  // Debug logging
-  if (typeof window !== "undefined") {
-    console.log("BlogPage - info:", info);
-    console.log("BlogPage - posts:", posts.map(p => ({
-      id: p.id,
-      title: p.title,
-      blockNumber: p.blockNumber || "N/A",
-      transactionHash: p.transactionHash || "(empty)",
-      timestamp: p.timestamp,
-    })));
-    console.log("BlogPage - isLoadingPosts:", isLoadingPosts);
-    console.log("BlogPage - postCount:", info?.postCount);
-    console.log("BlogPage - posts.length:", posts.length);
-  }
+  const isLoading = !hasReadBlog || isLoadingInfo || isLoadingPosts;
 
   // Paginate posts
   const sortedPosts = [...posts].sort((a, b) => b.timestamp - a.timestamp);
   const paginatedPosts = sortedPosts.slice(page * perPage, (page + 1) * perPage);
   const totalPages = Math.ceil(posts.length / perPage);
 
-  // Debug: Log pagination info
-  if (typeof window !== "undefined") {
-    console.log("Pagination - page:", page, "perPage:", perPage);
-    console.log("Pagination - sortedPosts.length:", sortedPosts.length);
-    console.log("Pagination - paginatedPosts.length:", paginatedPosts.length);
-    console.log("Pagination - totalPages:", totalPages);
-  }
-
   return (
     <main className="min-h-screen gradient-bg">
       <Header />
 
       <div className="container mx-auto px-4 pt-24 pb-12">
-        {!info && isLoadingPosts ? (
+        {isLoading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>

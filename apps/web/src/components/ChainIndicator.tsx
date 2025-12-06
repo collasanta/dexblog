@@ -70,7 +70,12 @@ function ChainIcon({ chainId }: { chainId: number }) {
   return <div className={`h-5 w-5 rounded-full ${fallbackColor}`} />;
 }
 
-export function ChainIndicator() {
+interface ChainIndicatorProps {
+  // When true, always show the chain name (even on small screens).
+  showName?: boolean;
+}
+
+export function ChainIndicator({ showName = false }: ChainIndicatorProps) {
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
   const [showEthereumDialog, setShowEthereumDialog] = useState(false);
@@ -106,8 +111,12 @@ export function ChainIndicator() {
           <button className="flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg bg-muted/50 border border-border/50 hover:bg-muted/70 transition-colors cursor-pointer">
             <ChainIcon chainId={chainId} />
             {/* Desktop: show name and chevron */}
-            <span className="hidden sm:inline text-sm font-medium text-foreground">{chainName}</span>
-            <ChevronDown className="hidden sm:block h-4 w-4 text-muted-foreground" />
+            <span
+              className={`${showName ? "inline" : "hidden sm:inline"} text-sm font-medium text-foreground whitespace-nowrap`}
+            >
+              {chainName}
+            </span>
+            <ChevronDown className={`${showName ? "block" : "hidden sm:block"} h-4 w-4 text-muted-foreground`} />
           </button>
         </DropdownMenuTrigger>
         

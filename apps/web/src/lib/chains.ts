@@ -1,7 +1,10 @@
 import { base, arbitrum, arbitrumSepolia, optimism, mainnet, bsc } from "wagmi/chains";
 
+const arbitrumTestnet = { ...arbitrumSepolia, name: "Arb. Testnet" } as const;
+const bnb = { ...bsc, name: "BNB" } as const;
+
 // Chains available in the UI (Ethereum shows popup when selected)
-export const supportedChains = [base, arbitrum, arbitrumSepolia, optimism, mainnet, bsc] as const;
+export const supportedChains = [base, arbitrum, arbitrumTestnet, optimism, mainnet, bnb] as const;
 
 export type SupportedChainId = 1 | 10 | 56 | 8453 | 42161 | 421614;
 

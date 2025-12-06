@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { Header } from "@/components/Header";
+import { ChainIndicator } from "@/components/ChainIndicator";
 import { GlassCard } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useUserBlogs } from "@/hooks/useUserBlogs";
 import { useAccount, useChainId } from "wagmi";
-import { getChainName } from "@/lib/chains";
+import { getChainName, supportedChains } from "@/lib/chains";
 import {
   Loader2,
   PenLine,
@@ -21,25 +22,33 @@ export default function DashboardPage() {
   const { blogs, isLoading, blogCount } = useUserBlogs();
   const chainId = useChainId();
   const chainName = getChainName(chainId);
+  const isSupportedChain = supportedChains.some((chain) => chain.id === chainId);
 
   return (
     <main className="min-h-screen gradient-bg">
       <Header />
 
       <div className="container mx-auto px-4 pt-24 pb-12">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold mb-2">Your Blogs</h1>
-            <p className="text-muted-foreground">
-              Manage your DexBlogs on {chainName}
-            </p>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <span>Manage your DexBlogs on</span>
+              {isSupportedChain ? (
+                <ChainIndicator showName />
+              ) : (
+                <span className="font-medium text-foreground">{chainName}</span>
+              )}
+            </div>
           </div>
-          <Link href="/">
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Create New Blog
-            </Button>
-          </Link>
+          <div className="w-full sm:w-auto">
+            <Link href="/">
+              <Button className="w-full sm:w-auto gap-2">
+                <Plus className="h-4 w-4" />
+                Create New Blog
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {!isConnected ? (
