@@ -21,6 +21,8 @@
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
     "test:integration": "tsx test-suite.ts",
+    "test:examples": "tsx scripts/examples-smoke.ts",
+    "smoke:rw": "node scripts/smoke-read-write.js",
     "prepublishOnly": "npm run build && npm run typecheck"
   },
   "peerDependencies": {
