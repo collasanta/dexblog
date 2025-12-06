@@ -87,3 +87,4 @@ Approximate deployment costs:
 - **Publishing a post**: ~50K gas (~$0.01 on Base)
 
 
+

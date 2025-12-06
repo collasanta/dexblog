@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { Button } from "./button";
 
@@ -11,6 +12,12 @@ interface DialogProps {
 }
 
 export function Dialog({ open, onOpenChange, children }: DialogProps) {
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
   React.useEffect(() => {
     if (open) {
       // Store original padding-right to account for scrollbar
@@ -27,19 +34,22 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
     };
   }, [open]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+  const dialogContent = (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center">
       <div
         className="fixed inset-0 bg-black/50 backdrop-blur-sm"
         onClick={() => onOpenChange(false)}
       />
-      <div className="relative z-50 w-full max-w-md mx-4 bg-background border border-border rounded-lg shadow-lg">
+      <div className="relative z-[100] w-full max-w-md mx-4 bg-background border border-border rounded-lg shadow-lg">
         {children}
       </div>
     </div>
   );
+
+  // Render dialog in a portal to escape any parent overflow/z-index constraints
+  return createPortal(dialogContent, document.body);
 }
 
 interface DialogContentProps {
